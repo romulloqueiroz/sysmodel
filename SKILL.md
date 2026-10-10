@@ -50,8 +50,17 @@ Read the step's guide before working on it. Each says what the step fills in, wh
    ahead on a later step only if the engineer asks. When all six are approved, go to Building.
 2. Read that step's guide, then the model.
 3. If the step was sent back, the note is your task list. Handle every point in it; ask about any point you don't understand.
-4. Ask the engineer what only they can know (the guides mark these **Ask:**): users, priorities, thresholds, budgets,
-   deadlines. Ask in one short batch of plain questions. Don't invent these facts, and don't park them as TBD (rule R24).
+4. Ask the engineer what only they can know: users, priorities, thresholds, budgets, deadlines. Don't invent these
+   facts, and don't park them as TBD (rule R24).
+   - The guide's **Ask:** lines are a list to choose from, not a script. Skip what the brief, the repo or an earlier
+     answer already settles.
+   - Ask with the AskUserQuestion tool, in rounds of at most 4 questions, most important first (the guide's order).
+     Give each question 2-4 likely answers drafted from what you know, your recommendation first, marked
+     "(Recommended)"; the engineer can always type their own. Numbers too: offer 2-4 sensible values.
+   - One thing per question, in one short line. Ask another round only for what the answers left open.
+   - Where you can propose a sensible value yourself (wording, a technical default), don't ask: use it, and list it
+     in the hand-off as unconfirmed.
+   - Without the AskUserQuestion tool, ask the same small rounds as a numbered list with the suggested answers.
 5. Edit the model. Keep ids stable: links and approvals hang on them. For a new model use short ids like the example's (`Q1`, `F11`, `C2`);
    otherwise follow the style already in the file.
 6. Run `check --step N` until nothing must be fixed. Read the warnings: fix them, or say in the hand-off why they stay.
