@@ -68,16 +68,16 @@ functions:
   - {id: F2, name: Store links, parent: F0, inputs: [I5], outputs: [I6], done_when: Link persisted, runs_in: C2}
 requirements:   # new entries, added to the existing list
   # I5 (Link record) is internal: F11 makes it, F2 takes it
-  - {id: Q5, text: The system shall produce a link record for each short link created., category: io, subcategory: output, stage: release, derived_from: [Q1], specifies: [I5, F11]}
-  - {id: Q6, text: The system shall accept a link record for storage., category: io, subcategory: input, stage: release, derived_from: [Q1], specifies: [I5, F2]}
+  - {id: Q6, text: The system shall produce a link record for each short link created., category: io, subcategory: output, stage: release, derived_from: [Q1], specifies: [I5, F11]}
+  - {id: Q7, text: The system shall accept a link record for storage., category: io, subcategory: input, stage: release, derived_from: [Q1], specifies: [I5, F2]}
   # Q4 (20 USD a month) shared out: 12 + 6, 2 held back
-  - {id: Q7, text: The web service shall cost less than 12 USD per month to run., category: system-wide, subcategory: cost, stage: release, derived_from: [Q4], objective: O1, specifies: [C1]}
-  - {id: Q8, text: The database shall cost less than 6 USD per month to run., category: system-wide, subcategory: cost, stage: release, derived_from: [Q4], objective: O1, specifies: [C2]}
+  - {id: Q8, text: The web service shall cost less than 12 USD per month to run., category: system-wide, subcategory: cost, stage: release, derived_from: [Q4], objective: O1, specifies: [C1]}
+  - {id: Q9, text: The database shall cost less than 6 USD per month to run., category: system-wide, subcategory: cost, stage: release, derived_from: [Q4], objective: O1, specifies: [C2]}
   # Q3 (99.9%) shared out: two parts in series
-  - {id: Q9, text: The database shall be available 99.97% of each month., category: system-wide, subcategory: quality, stage: release, derived_from: [Q3], specifies: [C2], threshold: 99.97% monthly availability}
+  - {id: Q10, text: The database shall be available 99.97% of each month., category: system-wide, subcategory: quality, stage: release, derived_from: [Q3], specifies: [C2], threshold: 99.97% monthly availability}
 ```
 `decisions.md` notes for the same model (not stored in the model):
 ```
 Control: C1 calls C2 (sends I5, gets I6 back); C2 never calls C1, so there is no wait loop.
-Risk: Q3 (99.9%): C1 at 99.95% and C2 at 99.97% (Q9), in series, give 99.92%. C2 is the hard number, so test it early.
+Risk: Q3 (99.9%): C1 at 99.95% and C2 at 99.97% (Q10), in series, give 99.92%. C2 is the hard number, so test it early.
 ```

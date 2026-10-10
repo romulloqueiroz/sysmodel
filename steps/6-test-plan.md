@@ -7,6 +7,7 @@ Decides how each requirement gets proven, by whom, and what counts as a pass. It
 - `method` (qualification method, Table 11.3, p. 301): the book's four become two. `automated`: a script decides pass or fail and anyone can rerun it (the book's instrumented test). `manual`: a person performs or judges it (inspection, demonstration, analysis, user trial).
 - `description` (optional): the setup or input, the action, and the expected result with values, for a positive and a negative case. The `name` stays short; the description carries the values. For T2: "Submit a 2000-character URL: a short link comes back. Submit 2001 characters: refused with an error, nothing stored." The build spec prints it.
 - `verifies` (qualifies, p. 142): the requirement ids this test proves. One test may prove several; a requirement may need several tests.
+- `scenarios` (optional, p. 56): the ids of the scenarios the test walks.
 - The pass line has no field of its own: it is the requirement's `threshold` (or the number in its text), plus trial counts or duration in the test `name`; the expected result with values goes in `description`.
 - The model cannot hold these, so write them to `decisions.md` under this step's heading: the kind of each test (verification, validation or acceptance), steps and data of manual tests, the test environment and stand-ins for outside systems, risks to finishing the tests, what you skipped.
 - Tests change only step 6. A new requirement also changes step 1: propose it and ask first.
@@ -33,11 +34,11 @@ Decides how each requirement gets proven, by whom, and what counts as a pass. It
    - system-wide requirement: structural test of performance, recovery, stress, security or availability (Table 11.4, p. 302).
    - One test may prove several requirements; do not repeat checks (p. 299). A failing test should point at where it broke (p. 295). Where a requirement's job sits in one part (`runs_in`), also test that part alone with its neighbours faked (A116.P3, p. 299; p. 320).
 4. **Method (A116.P2.1, Table 11.3, p. 301).** `automated` whenever a script can decide. `manual` when a person must judge (reading a screen or docs: inspection), watch someone use the app (demonstration), or work from collected data or a model because a direct test is too costly or impossible (analysis: monthly uptime report, cost projection).
-5. **Scenario tests (A116.P1.4, P4.1, pp. 297-298; p. 305).** Give each `scenarios` entry at least one test that walks its steps from the outside, and name the scenario in the test. Tasks come from the operational concept, each with a setting, circumstances, a clear outcome and a time limit (p. 305). Whole scenarios serve acceptance and late validation; segments serve earlier work (p. 305).
+5. **Scenario tests (A116.P1.4, P4.1, pp. 297-298; p. 305).** Give each `scenarios` entry at least one test that walks its steps from the outside, and put the scenario id in that test's `scenarios` (C05). Tasks come from the operational concept, each with a setting, circumstances, a clear outcome and a time limit (p. 305). Whole scenarios serve acceptance and late validation; segments serve earlier work (p. 305).
 6. **Interface and fault tests (Table 11.4, p. 302).** Every interface from step 5 needs a test that sends its items across it. Every fault-handling job needs a test that causes the fault and checks recovery. Link them to the requirement that justifies the interface or job; if there is none, that is a step 1 gap: propose one. Spend effort where faults cost most and happen most: the book's fault scale puts lost inputs, mixed-up data and silent database corruption high (p. 296) and weighs consequence by frequency (pp. 296-297).
 7. **Acceptance (pp. 302-305).** Stakeholders decide acceptance, with thresholds agreed early (p. 302). A small, representative group of real users does it, and usability is the focus (p. 303): learnability, efficiency, memorability, error rate, satisfaction, written as system-wide requirements (p. 305). Two designs (p. 304): assume the app is acceptable and try to fail it with a few hard key tasks, or assume it is not and require most ordinary tasks to pass. **Ask:** Who are the representative users, and which tasks decide yes or no? Expect `manual` tests.
 8. **What did we forget? (pp. 303-304).** The key question in verification and validation is "what have we forgotten to test?" Brainstorm odd input orders and paths you think cannot matter. The book's cases: Therac-25, a rare command sequence (p. 307), and Ariane 5, an old requirement carried into a new setting (p. 308). A found hole usually needs a new requirement first (step 1: propose, ask), then a test.
-9. **Coverage (A116.P1.8-P1.10, p. 297).** Run `sysmodel check --step 6` until R25 is clean. The tool does not check these; sweep them yourself (pp. 286, 288): each scenario has a test; each objective has a requirement with a test; each external connection has an `external-interface` requirement; each item entering or leaving has an io requirement. Trade-off rows show Optional; add a test where a number exists (validation covers cost and trade-offs, p. 142). The `tests` list is the master plan.
+9. **Coverage (A116.P1.8-P1.10, p. 297).** Run `sysmodel check --step 6` until R25 is clean and C05 (a scenario no test names) has nothing to say. C02 (step 1) and C01 (step 2) already warn when an objective has no requirement or an outside item has no io requirement. The tool does not check these; sweep them yourself (pp. 286, 288): each objective has a requirement with a test; each external connection has an `external-interface` requirement. Trade-off rows show Optional; add a test where a number exists (validation covers cost and trade-offs, p. 142). The `tests` list is the master plan.
 10. **Skip or mention (A1161-A1166, P1.6-P1.7, P2.2-P2.5, P3.2-P3.6, P4.5; pp. 297-300).** Skip designing a qualification system (its functions, parts, interfaces, models), organizations, resources, assignments and schedules. Mention only what limits testing: staging, test accounts and data, stand-ins for outside systems you cannot call in tests (p. 293), and risks to finishing (P1.9, pp. 297-298). Test code, data and manual procedures (P4.2-P4.4) live in the repo, not the model. Grow tests from parts to whole; assembling everything untested at once makes errors hard to trace (pp. 293, 295).
 
 ## Good vs bad
@@ -53,8 +54,9 @@ Decides how each requirement gets proven, by whom, and what counts as a pass. It
 | Rule | What it means | Usual fix |
 |---|---|---|
 | R25 (p. 142), error | every leaf io and system-wide requirement is in some test's `verifies` | add a test; if no test can pass or fail, rewrite the requirement in step 1 (ask) |
+| C05 (p. 56), warning | every scenario is in some test's `scenarios` | add the scenario id to the test that walks it, or write that test |
 
-Earlier rules still apply: S03 (`verifies` must point at requirements) and R04 (step 1: a group is never tested). A person signs off: no judgment item starts at this step. In `decisions.md`, say which tests are verification, validation and acceptance, and what you skipped.
+Earlier rules still apply: S03 (`verifies` must point at requirements, `scenarios` at scenarios) and R04 (step 1: a group is never tested). A person signs off: no judgment item starts at this step. In `decisions.md`, say which tests are verification, validation and acceptance, and what you skipped.
 
 ## Example
 ```yaml
@@ -62,7 +64,7 @@ scenarios:                       # from step 1
   - id: SC1
     name: Marketer shares a link
     steps: ["Marketer submits a long URL", "System returns a short link", "Visitor opens it", "System redirects the visitor"]
-tests:                           # T1-T4 as in valid.yaml; T3 and T4 now carry their pass lines
+tests:                           # T1-T4 and T6 as in valid.yaml; T3 and T4 now carry their pass lines
   - {id: T1, name: Create link end to end, method: automated, verifies: [Q1]}
   - id: T2
     name: Long URL of 2000 characters accepted
@@ -71,7 +73,7 @@ tests:                           # T1-T4 as in valid.yaml; T3 and T4 now carry t
     verifies: [Q2]
   - {id: T3, name: "Availability probe, 30 days, at least 99.9%", method: manual, verifies: [Q3]}
   - {id: T4, name: Cloud bill for one month under 20 USD, method: manual, verifies: [Q4]}
-  - {id: T5, name: "SC1 walk-through: create link, open it, land on target", method: automated, verifies: [Q1]}
-  - {id: T6, name: "Storage fault injected, write retried", method: automated, verifies: [Q1]}   # only if step 5 added F13
-# Gap: no requirement covers SC1's last step (the redirect). Propose one in step 1, then T5 should verify it too.
+  - {id: T5, name: "SC1 walk-through: create link, open it, land on target", method: automated, verifies: [Q1, Q5], scenarios: [SC1]}
+  - {id: T6, name: Redirect end to end, method: automated, verifies: [Q5]}
+  - {id: T7, name: "Storage fault injected, write retried", method: automated, verifies: [Q1]}   # only if step 5 added F13
 ```

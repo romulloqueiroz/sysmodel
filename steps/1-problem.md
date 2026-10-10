@@ -4,11 +4,11 @@ Fix the design problem: how the app is used (scenarios), where it stops and what
 
 ## Fills in
 - `stages` (life-cycle phases, p. 137): keep the default `[build, release]`.
-- `system.purpose` (vision, p. 146): one sentence, what the app is, in general terms, no technology.
+- `system.purpose` (vision, p. 146): required. One sentence, what the app is, in general terms, no technology (R31).
 - `stakeholders` (p. 132): each group with a stake.
 - `sources` (documents or statements requirements trace to, p. 145): `title`, and `stakeholder` for who said it.
 - `scenarios` (operational concept, p. 146): `name` and `steps`; each step is one exchange between the system and an outside party.
-- `external` (external systems, p. 133): `kind` is `external`, `enabling` or `context`; `sends` and `receives` list item ids.
+- `external` (external systems, p. 133): `kind` is `external`, `enabling` or `context`; `sends` and `receives` list item ids. Each must send or receive items (R18).
 - `items` (inputs and outputs of the system, p. 151): only what crosses the boundary. Step 2 adds internal items.
 - `objectives` (objectives hierarchy, p. 154): `name`, `parent`, `weight` (0 to 1).
 - `requirements` (p. 137): `category`, `subcategory`, `stage`, `source`, `threshold`, `objective`, `parent` (for groups), `specifies` (system-wide ones only now).
@@ -23,7 +23,7 @@ Fix the design problem: how the app is used (scenarios), where it stops and what
 1. **Stakeholders and sources** (the stakeholder inputs that feed A1111-A1114, Fig 6.3 p. 135; pp. 132, 145)
    - Propose `stakeholders` from the brief and repo. Think past "user": payer, developer, tester, deployer, operator on call, maintainer, support, anyone harmed by a failure (p. 132). Each sees the system differently; leaving one out makes the app look like a failure from that view.
    - **Ask:** Who uses this app, who pays for it, who builds and runs it, and who is hurt if it fails?
-   - Add a `sources` entry for each document or talk the requirements come from (brief, ticket, interview, policy, contract).
+   - Add a `sources` entry for each document or talk the requirements come from (brief, ticket, interview, policy, contract, law). A law or policy that only constrains requirements is a `source`, not an external (R18).
    - **Ask:** Which documents or conversations say what you need? With none, the source is the engineer's answers, written to `answers.md` (see SKILL.md) and dated (a statement counts, p. 145).
    - Never cite a source nobody gave. R21 only checks that a source id exists.
 2. **Operational concept** (A1111, pp. 136, 146-151)
@@ -33,24 +33,25 @@ Fix the design problem: how the app is used (scenarios), where it stops and what
    - The agent proposes from the repo; the engineer confirms. **Ask:** Walk me through the most important use: what does the person give the app, and what do they get back? Which failures matter most?
    - Mission measures (what stakeholders need to achieve with the app, pp. 148, 151) become the top objectives in 4.
 3. **System boundary** (A1112, pp. 133-134, 151-152)
-   - Inside is open to change; outside is fixed and produces the constraint requirements (p. 151). **Ask:** Which of these can you change and which are fixed (third-party APIs, the host, the browser)?
-   - Add an `external` for each outside party in the scenarios. `external`: exchanges items both ways (browser, payment API, partner service). `enabling`: supports building and shipping, not running (CI pipeline, package registry, test environment; p. 43). `context`: can affect the app, which cannot affect it (law, browser standards, traffic patterns; p. 134).
-   - Add one `item` per distinct thing crossing the boundary (data, event, file, request), named as in the scenarios. `sends` = items it gives the app; `receives` = items the app gives it. A context only sends (R18).
-   - Validity (p. 152): every output of the app goes to some external. An `external` that receives nothing from the app is really context.
+   - Inside is open to change; outside is fixed and produces the constraint requirements (p. 151). **Ask:** Which of these can you change and which are fixed (third-party APIs, the browser)?
+   - Add an `external` for each outside party in the scenarios. An outside system is defined by the items it sends or receives, and it must exist whatever you build (R18). `external`: sends and receives items (browser, payment API, partner service). `enabling`: supports building and shipping, not running, and still sends or receives items (p. 43). `context`: sends items into the app, which cannot affect it and gives it nothing (traffic patterns, an upstream feed; p. 134).
+   - Not an external: a law or policy that only constrains requirements is a `source`. A host, staging site, test environment, build pipeline or load generator is a design choice for step 3. Put what it implies in requirement text, without a product name: "The System restarts within 5 minutes", or a qualification requirement naming staging tests.
+   - Add one `item` per distinct thing crossing the boundary (data, event, file, request), named as in the scenarios. `sends` = items it gives the app; `receives` = items the app gives it. A context sends some items and receives none (R18).
+   - Validity (p. 152): every output of the app goes to some external. An `external` must receive some item from the app (R18); one that receives nothing is really context.
    - For each external ask "only sends? only receives? does that make sense?" A gap often means a missing scenario (p. 311).
    - If you merge items to keep it readable, remember each detailed input/output still needs its own requirement (p. 312).
    - Step 2 matches every sent or received item to a function (R10), so list no item the app does not use.
 4. **Objectives hierarchy** (A1113, pp. 152-156)
    - An objective is something stakeholders value enough to pay for: more of it, or less cost (p. 154). Root = overall value; children are its natural parts. Usually 2 to 5 levels; do not decompose too far (pp. 154, 156). Leaves are measurable (response time, availability, monthly cost).
    - Drop means objectives (how: "use serverless", "add a cache") and strategic ones the app cannot settle ("grow brand awareness"). If one objective matters only because it improves another, it is a means (p. 154).
-   - `weight` says how much a swing from an objective's worst acceptable to best likely value matters among its siblings (p. 156). The book's sibling weights add to 1 (p. 155). Weights are the stakeholders' values, not the engineer's guess (p. 156).
+   - `weight` says how much a swing from an objective's worst acceptable to best likely value matters among its siblings (p. 156). The book's sibling weights add to 1 (p. 155; C04 warns). Weights are the stakeholders' values, not the engineer's guess (p. 156).
    - **Ask:** first what the app must be good at: offer the objectives you drafted, and let the engineer add or drop. Then: If you could improve only one of these, from the worst value you would accept to the best you expect, which first? How do you rank the rest?
    - The value range per leaf has no field: its worst value goes in a linked requirement's `threshold`, its best as the design goal in that requirement's text; value curves go in `decisions.md`.
-   - Each leaf objective should be the `objective` of at least one requirement (Fig 6.4, p. 143).
+   - Each leaf objective should be the `objective` of at least one requirement (Fig 6.4, p. 143; C02 warns).
 5. **Requirements** (A1114, pp. 137-146, 158-163)
    - Topics come from the scenarios, the externals and items, and the objectives (pp. 134, 159). Keep them at system level, not metasystem or parts (p. 134).
    - **io**: `input` (one or more per input), `output` (one or more per output), `external-interface` (limits an outside party puts on how inputs arrive or outputs leave: protocol, format, auth, rate limit; pp. 140, 160), `functional` (the two to seven first-level jobs, not a feature list; features show up as inputs and outputs, p. 141; step 2 turns them into functions, p. 317). For each item think quality, quantity, timing (Table 6.2, p. 140) and out-of-range inputs with the response. For each context element (load peaks, bad networks) ask which variations the app must handle and whether it must protect itself (p. 160). Put the item's name in the text; step 2 links it (R05, R07).
-   - **system-wide**: `technology` (a mandated tool or platform; engineers prefer none, so give the reason, p. 161), `quality` (availability, reliability, security, usability, maintainability, testability; laws such as accessibility or privacy go here, p. 161), `cost` (the running cost limit; a build budget only if someone set one), `schedule` (only a date the app must be live by). The book expects one of each per stage (p. 161), but an app an AI builds often has no fixed date: **Ask:** Is there a date it must be live by? If not, write no schedule requirement. Set `specifies` to the system id (R06).
+   - **system-wide**: `technology` (a mandated tool or platform; engineers prefer none, so give the reason, p. 161), `quality` (availability, reliability, security, usability, maintainability, testability; laws such as accessibility or privacy go here, p. 161), `cost` (the running cost limit; a build budget only if someone set one), `schedule` (only a date the app must be live by). The book expects one of each per stage (p. 161), but an app an AI builds often has no fixed date: **Ask:** Is there a date it must be live by? If not, write no schedule requirement. Set `specifies` to the system id (R06). Cost and schedule requirements need a `threshold` (R23).
    - **trade-off**: `performance`, `cost`, `cost-performance` say how to compare two designs, from the objective weights (pp. 141, 161). Set `objective`. Weights and preferences come from stakeholders (R28).
    - **qualification**: see 7.
    - Every leaf has `category`, `subcategory`, `stage`, a `source`, and "shall" in its text. Stage is the system the requirement is about: `build` = making the app (code, CI, tests), `release` = the app shipped and in use. Almost every requirement is `release`; `build` is for how the app is made (for example, CI time). If unsure, ask once and keep that rule.
@@ -66,9 +67,9 @@ Fix the design problem: how the app is used (scenarios), where it stops and what
    - A conflict goes back to 5, not forward (p. 135). **Ask:** These cannot both hold: X against Y. Which do you relax?
    - Do not over-constrain: leave room for several designs (p. 132). Put the feasibility argument in `decisions.md`, one line per tight requirement.
 7. **Qualification requirements** (A1116, pp. 137, 142, 162-163; step 6 builds the tests)
-   - Write at least one `category: qualification` requirement per kind: `observance` (what data is collected for each io and system-wide requirement, and where: logs, probes, test runs), `verification-plan` (how the data shows the build meets the requirements), `validation-plan` (how it shows the app meets stakeholders' needs), `acceptance-plan` (what the stakeholders accept as proof).
+   - Write at least one `category: qualification` requirement per kind (C03 advises): `observance` (what data is collected for each io and system-wide requirement, and where: logs, probes, test runs), `verification-plan` (how the data shows the build meets the requirements), `validation-plan` (how it shows the app meets stakeholders' needs), `acceptance-plan` (what the stakeholders accept as proof).
    - The book treats the acceptance plan as the true exit: once stakeholders approve it, the rest is presumed defined well enough (p. 130). **Ask:** What would you need to see to say "yes, ship it"?
-   - Name tooling the plan needs (staging site, load generator) in the text. If it sits outside the app, add it as an `enabling` external.
+   - Do not name tooling the plan needs (staging site, load generator) or add it as an external: it is a design choice for step 3. Write what the plan needs as requirement text, for example "accepted when marketing completes scenarios SC1 and SC2 in staging tests with no failures".
 8. **Approval** (A1117, pp. 135, 137). The engineer decides. Issues stakeholders raise go back to the scenarios and the boundary first (Fig 6.3, p. 135), so expect to edit those.
 
 ## Good vs bad
@@ -81,6 +82,7 @@ Fix the design problem: how the app is used (scenarios), where it stops and what
 - Bad: "The system shall be fast, reliable and use Redis." Good: "The system shall redirect a visitor within 200 ms for 99% of requests." (threshold `200 ms at the 99th percentile`; availability is its own requirement; Redis waits for step 3; tail form p. 148).
 - Bad: "The system shall not crash on bad input." Good: "The system shall answer a submitted URL that is not a valid http or https address with an error response."
 - Bad objective: "Use serverless functions" (a means). Good: "Low running cost".
+- Bad external: "Build pipeline", "Staging site", "Data protection law". Good: none of them are externals; the law is a `source` with a `title`.
 
 ## Checks
 | Rule | What it means | Usual fix |
@@ -93,12 +95,15 @@ Fix the design problem: how the app is used (scenarios), where it stops and what
 | R03 (p. 143) | each leaf has a `stage` in `stages` | set `build` or `release` |
 | R04 (p. 50) | a group is not tested and specifies nothing | move `specifies` to its children |
 | R06 (p. 59) | a system-wide requirement specifies only the system | `specifies: [S]` |
-| R11 (p. 100) | no `parent` loops | break the loop |
-| R18 (p. 43) | a `context` receives nothing | if the app gives it items, make it `external`; else drop `receives` |
+| R11 (p. 100) | no `parent` or `derived_from` loops | break the loop |
+| R18 (p. 43) | every external sends or receives items; a `context` sends some and receives none; an `external` receives some | no items at all: a law or policy is a `source`; a host or tool is a step 3 choice, so delete it and put what it implies in requirement text. A context that receives: make it `external`. An external that receives nothing: make it `context` |
 | R21 (p. 145) | each leaf has a `source` or `derived_from` | add a source (ask) |
-| R23 (p. 138) | a system-wide `quality` requirement has a `threshold` | add the number with units |
+| R23 (p. 138) | a system-wide `quality`, `cost` or `schedule` requirement has a `threshold` | add the number with units |
 | R24 (p. 145) | no TBD or TBR in `text` or `threshold` | ask for the value |
 | R26 (p. 145), warning | `text` contains "shall" | rewrite as a requirement |
+| C02 (p. 143), warning | each leaf objective is the `objective` of some requirement | set `objective` on the requirement that measures it; drop the objective if none does |
+| C03 (p. 142), advice | each qualification subcategory (observance, verification-plan, validation-plan, acceptance-plan) has a requirement | write the missing one (7) |
+| C04 (p. 155), warning | when every sibling objective has a `weight`, they add to 1 | change the weights with the engineer |
 
 R05 and R07 (step 2) need io `specifies`; R25 (step 6) needs a test per io and system-wide requirement, so write each so a test can pass or fail.
 
@@ -106,11 +111,13 @@ A person signs off:
 - R19 (p. 48): the externals and items match the scenarios.
 - R27 (p. 58): each requirement is one testable statement: subject, shall, relation, threshold with units; no "and/or", no negatives.
 - R28 (p. 141): trade-off requirements reflect stakeholder preferences (objectives).
+- R31 (p. 138): no requirement or the purpose names a solution (product, technology, hosting, a part) unless the engineer set it as a rule.
+- R32 (p. 134): the requirements can all be met together within the cost and date (the feasibility argument in `decisions.md`).
 
 ## Example
 ```yaml
 stakeholders: [{id: SH1, name: Marketing team}]
-sources: [{id: SRC1, title: Marketing interview, stakeholder: SH1}]
+sources: [{id: SRC1, title: Marketing interview, stakeholder: SH1}, {id: SRC2, title: Data protection law}]   # a law is a source, not an external
 objectives:
   - {id: O0, name: Good value for marketing}
   - {id: O1, name: Low running cost, parent: O0, weight: 0.4}
@@ -124,8 +131,6 @@ scenarios:
     steps: ["Web visitor sends Short code", "System sends Not found notice to Web visitor"]
 external:
   - {id: E1, name: Web visitor, kind: external, sends: [I1, I3], receives: [I2, I4, I7]}
-  - {id: E2, name: Build pipeline, kind: enabling}
-  - {id: E3, name: Data protection law, kind: context}
 items: [{id: I3, name: Short code}, {id: I4, name: Redirect}, {id: I7, name: Not found notice}]   # I1, I2 as in valid.yaml
 requirements:
   - {id: Q0, text: Input and output requirements}
@@ -133,5 +138,5 @@ requirements:
   - {id: Q3, text: The system shall be available 99.9% of each month., category: system-wide, subcategory: quality, stage: release, source: SRC1, specifies: [S], threshold: 99.9% monthly availability}
   - {id: Q6, text: The system shall cost 20 USD per month or less to run. The design goal is 10 USD., category: system-wide, subcategory: cost, stage: release, source: SRC1, specifies: [S], threshold: 20 USD per month, objective: O1}
   - {id: Q7, text: The system shall be compared with other designs using weight 0.4 on running cost and 0.6 on redirect speed., category: trade-off, subcategory: cost-performance, stage: release, source: SRC1, objective: O0}
-  - {id: Q8, text: The system shall be accepted when marketing completes scenarios SC1 and SC2 on the staging site with no failures., category: qualification, subcategory: acceptance-plan, stage: build, source: SRC1}
+  - {id: Q8, text: The system shall be accepted when marketing completes scenarios SC1 and SC2 in staging tests with no failures., category: qualification, subcategory: acceptance-plan, stage: build, source: SRC1}
 ```

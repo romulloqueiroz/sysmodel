@@ -35,11 +35,11 @@ Open the black box from step 1: one tree of jobs (functions, p. 178), the items 
 4. **Data model (A1123, pp. 181, 202).** The items are the data model. Review the item list for missing or redundant items (p. 200). Name items with nouns (p. 201). Every item comes from an external or a leaf and goes to an external or a leaf. The model keeps no relations, but sketching them often exposes design issues the function view hid (p. 202): put what you find in `decisions.md`. Put each item's fields, format and limits in its `description`. **Ask:** when a business rule appears: can one long URL have several short codes? Do codes expire? Business rules a job follows (how codes are made, uniqueness, expiry, what repeats do) are decisions about behaviour: write each as an io requirement, so it reaches the spec and gets a test.
 5. **Complete the models (A1124, pp. 178, 181, 201-205).**
    - `done_when` on every leaf: the observable result that ends it (exit criterion, p. 178). Name each way it can end (`Short link returned; or error response returned`). A time or size limit belongs in an io requirement (Table 6.2, p. 140). Propose each one; the engineer confirms.
-   - External match (R10): every item an external `sends` is an input of some leaf; every item it `receives` is an output of some leaf. Fix the function wiring first; change `external` only if step 1 was wrong, and say so. Settings and secrets a part needs (an API token, a base URL) are items sent by an enabling external (the deploy setup) to the job that needs them.
+   - External match (R10): every item an external `sends` is an input of some leaf; every item it `receives` is an output of some leaf. Fix the function wiring first; change `external` only if step 1 was wrong, and say so. The converse (R10): every input of a leaf is given by another leaf or sent by an external, and every output of a leaf is taken by another leaf or received by an external. Settings and secrets a part needs (an API token, a base URL) are items sent by whoever owns them: the outside system that issues them (the chat service issues the bot token) or the person who runs the app (an operator). Never by a host or deploy tool: that is a step 3 choice.
    - Error handling (pp. 202-205): add input error trapping now (check type and range, tell the user, ask again). Error detection, damage confinement, recovery and fault reporting depend on the parts (p. 202): add what you can, list what you deferred in `decisions.md`.
    - Review (pp. 181, 201): the book has other engineers and stakeholders critique the draft for missing functions and other splits. Hand the engineer the tree, the scenario chains and the alternative split. **Ask:** Who else should look at this tree?
 6. **Trace io requirements (A1125, pp. 182, 205-207).** Set `specifies` on each leaf requirement:
-   - input or output: the item and the leaf that receives or produces it (pp. 59, 205). The book also traces to every ancestor of that leaf; the tree already implies them, so do not list them.
+   - input or output: the item and the leaf that receives or produces it (pp. 59, 205). Every item you list must be one that a listed leaf takes or gives (R05). The book also traces to every ancestor of that leaf; the tree already implies them, so do not list them.
    - external-interface: the items the interface carries and the leaf that receives or sends them (p. 205).
    - functional: the first-level function, or the root (pp. 59, 205).
    - Exit test (pp. 177, 207): every io requirement has a function and an item (functional ones, a function); every leaf touching an external item has a requirement; every external item has one. Internal items get theirs later (pp. 206, 249).
@@ -53,21 +53,22 @@ Open the black box from step 1: one tree of jobs (functions, p. 178), the items 
 - Gap: Q2 limits URLs to 2000 characters but nothing returns an error for a longer one (pp. 192-193): add a function or output.
 - Model the system, not the externals (p. 201): `Visitor clicks link` is the visitor's job; the system's is `Redirect visitor`.
 - Conserve (pp. 182, 201): the leaves together take from outside exactly what the system takes and give exactly what it gives; none added, none dropped.
-- No output from thin air (p. 201): a `Monitor health` function needs an input item about the functions it watches. The checks do not catch an input nobody produces: look for it yourself.
+- No output from thin air (p. 201): a `Monitor health` function needs an input item about the functions it watches. R10 flags an input that no leaf gives and no external sends.
 - 2 to 7 first-level functions (p. 141); keep every node's children few enough to read (p. 183).
 - Every key output has feedback (p. 193).
 
 ## Checks
 | Rule | Means | Usual fix |
 |---|---|---|
-| R05 error (p. 59) | input/output/external-interface requirement specifies no item or no leaf function | add the item and the leaf that takes or gives it; add the function if none does |
+| R05 error (p. 59) | input/output/external-interface requirement specifies no item or no leaf function, or an item that none of the leaf functions it specifies takes or gives | add the item and the leaf that takes or gives it; add the function if none does; drop an item the leaf does not move |
 | R07 error (p. 59) | functional requirement does not specify the root or a first-level function | point `specifies` at the matching first-level function; if none matches, the split is missing one |
 | R08 warning (p. 141) | root has fewer than 2 or more than 7 children | above 7, group related functions under a new one; below 2, decompose the root |
 | R09 error (p. 51) | not exactly one function without a parent | give each stray function a parent, or add the missing root |
-| R10 error (p. 51) | an external sends/receives an item no leaf takes/gives | wire the item into a leaf; correct `external` only if step 1 was wrong |
+| R10 error (p. 51) | an external sends/receives an item no leaf takes/gives, or a leaf takes/gives an item that no leaf gives/takes and no external sends/receives | wire the item into a leaf, or add the function that produces or uses it; correct `external` only if step 1 was wrong |
 | R20 warning (p. 58) | leaf has no `done_when` | state when it is finished |
+| C01 warning (p. 59) | an item an outside system sends or receives is specified by no io requirement | add an io requirement for it (6), or add the item to one that is about it |
 
-Earlier rules also apply: S03 (references resolve: `parent` to a function, `inputs`/`outputs` to items) and R11 (no parent loops).
+Earlier rules also apply: S03 (references resolve: `parent` to a function, `inputs`/`outputs` to items) and R11 (no `parent` or `derived_from` loops).
 
 A person signs off: **R12** (p. 102), each function's subfunctions partition its behavior, no overlaps, no gaps. Give the engineer the scenario chains from 1 and 3 to judge it.
 
@@ -87,14 +88,14 @@ functions:                  # no runs_in: step 4
   - {id: F12, name: Redirect visitor, parent: F1, inputs: [I3, I6], outputs: [I4], done_when: Visitor redirected}
   - {id: F2, name: Store links, parent: F0, inputs: [I5], outputs: [I6], done_when: Link persisted}
 requirements:               # step 1 fields as before; only specifies is new
-  - id: Q1                  # functional -> first-level function
+  - id: Q1                  # functional -> first-level function, and an outside item it gives (C01)
     text: The system shall create a short link for a submitted long URL.
     category: io
     subcategory: functional
     stage: release
     parent: Q0
     source: SRC1
-    specifies: [F1]
+    specifies: [F1, I2]
   - id: Q2                  # input -> item and the leaf that takes it
     text: The system shall accept a long URL of up to 2000 characters.
     category: io
@@ -103,4 +104,5 @@ requirements:               # step 1 fields as before; only specifies is new
     parent: Q0
     source: SRC1
     specifies: [I1, F11]
+  # Q5 in valid.yaml does the same for I3 and I4
 ```

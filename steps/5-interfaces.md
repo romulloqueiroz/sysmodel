@@ -5,8 +5,9 @@ Decides every connection an item crosses, between two parts or between a part (o
 ## Fills in
 - `interfaces` (interface, pp. 266-267): `id`, `name`. Name the mechanism or standard it uses ("Public HTTP", "SQL over TCP"), not "API" or "link". Use `name` for the physical choice (A115.4).
 - `between` (external or internal interface, p. 267): exactly two ids. Each is a component, the system, or an external system. At least one must be the system or a component (R29). The ends decide the kind: an `external` end makes it an external interface. Two ends that talk over two mechanisms get two interfaces.
-- `carries` (items to be transported by the interface, p. 280): every item that crosses this connection, either direction. Direction is already in the jobs' `inputs` and `outputs`.
-- Step 5 writes `interfaces` only. The model cannot hold these, so write them to `decisions.md` under this step's heading: candidate architectures and why one won, fault analysis, speed estimates, any custom design.
+- `carries` (items to be transported by the interface, p. 280): at least one item; every item that crosses this connection, either direction. Direction is already in the jobs' `inputs` and `outputs`.
+- `requirements[].specifies` (p. 59): a requirement may name an interface it constrains, as well as the items and leaf job it already names. Step 5 approves these links.
+- Step 5 writes `interfaces` and these links only. The model cannot hold the rest, so write them to `decisions.md` under this step's heading: candidate architectures and why one won, fault analysis, speed estimates, any custom design.
 - Externals, items, jobs, parts and requirements belong to steps 1-4. Editing them makes those approvals stale, so where this guide says "propose and ask first", the engineer must agree before you write it.
 
 ## Start from
@@ -43,11 +44,11 @@ Decides every connection an item crosses, between two parts or between a part (o
 6. **Re-check.** Run `sysmodel check --step 5`. The book's exit test (p. 267): the interfaces fit the parts and meet the performance requirements. When parts or jobs change later, redo this step (p. 267).
 
 ## Good vs bad
-- Every item that crosses a part boundary rides on some interface (p. 57, R30(b)). Carry only items that really cross: nothing checks extras.
+- Every item that crosses a part boundary rides on some interface (p. 57, R30(b)). Carry only items that really cross: C06 warns about extras.
 - The interface does not change items, loses none, invents none (p. 266). Judge candidates against the requirements, not taste (pp. 280-281).
 - Take a standard before building your own (p. 281). The Ch 12 exercise starts from the outside items and gives each one its device (p. 320, Table 12.1 on p. 321).
 - Once parts exist, end an interface on the part, not on the system. An end also covers the parts under it: `[E1, C1]` serves C11 and C12.
-- Bad: `between: [E1, E2]` (two outside systems). Good: `between: [E1, C1]`; the system or a part must be at one end (R29).
+- Bad: `between` two outside systems (for example E1 and a payment API). Good: `between: [E1, C1]`; the system or a part must be at one end (R29).
 - Bad: `name: API`. Good: `name: Public HTTP`.
 - Bad: IF2 carries `[I5]` while F2 outputs I6 for F12. Good: `carries: [I5, I6]`; R30(b) names the missing item.
 
@@ -56,6 +57,7 @@ Decides every connection an item crosses, between two parts or between a part (o
 |---|---|---|
 | R29 (p. 61), error | an interface's two ends differ, and at least one is the system or a component | change an end: connect an outside system to a part, never to another outside system or to itself |
 | R30(b) (p. 57), error | every item that goes between two parts, or between a part and an outside system, is in `carries` of an interface whose ends cover both | add the item to an existing interface between those ends, or add one. If the flow itself is wrong (job in the wrong part), that is a step 4 fix: ask |
+| C06 (p. 48), warning | every item in `carries` flows between the interface's ends | remove the item, or fix the flow it should follow (a step 4 fix: ask) |
 
 R30(b) skips jobs with no `runs_in`, so a clean result means little until step 4 is done. A person signs off: no judgment item starts at this step; give the engineer your candidate comparison, written in `decisions.md`.
 
@@ -71,4 +73,7 @@ interfaces:
 #   items:      {id: I7, name: Write failure}                      # F2 would output [I6, I7]
 #   functions:  {id: F13, name: Retry failed write, parent: F1, inputs: [I7], outputs: [I5], done_when: Write retried, runs_in: C11}
 #   once approved: IF2 carries [I5, I6, I7]
+# A requirement that constrains an interface names it in `specifies` (here a rate limit on IF1):
+requirements:
+  - {id: Q11, text: The system shall accept up to 50 requests per second from one web visitor., category: io, subcategory: external-interface, stage: release, source: SRC1, specifies: [I1, F11, IF1], threshold: 50 requests per second}
 ```
