@@ -81,9 +81,36 @@ def test_spec_for_a_leaf_part(tmp_path, capsys):
     assert "These apply to the whole app; this part must not break them." in whole
     assert "**Q3**" in whole and "**Q4**" in whole and "Q3" not in io and "Q4" not in io
     assert "Objective: O1 Low running cost" in whole and "Threshold: 99.9% monthly availability" in whole
-    tests = under(out, "## Tests")
+    tests, wholetests = under(out, "## Tests").split("### Whole app\n")
     assert "| T1 Create link end to end | automated | Q1 |" in tests and "| T2 Long URL accepted | automated | Q2 |" in tests
     assert "T3" not in tests and "T4" not in tests
+    assert wholetests == ("\n| Test | Method | Proves |\n|---|---|---|\n| T3 Availability probe | manual | Q3 |\n"
+                          "| T4 Monthly bill review | manual | Q4 |\n")
+    assert "| Q2 |\n\n- **T2** Submit a 2000-character URL" in tests and "- **T2**" not in wholetests
+
+
+def test_spec_lists_the_items_the_part_takes_or_gives(tmp_path, capsys):
+    out = build(approved(tmp_path), "C11", capsys)
+    assert ("## Items\n\n- **I1 Long URL**: The URL to shorten: an absolute http or https URL, 1 to 2000 characters. "
+            "Example: https://example.com/spring-sale?utm=mail\n- **I2 Short link**\n- **I5 Link record**: What is stored per link") in out
+    assert out.index("## Connections") < out.index("## Items") < out.index("## Requirements")
+    assert out.count("- **I1 Long URL**") == 1 and "I6" not in under(out, "## Items")
+    m = copy.deepcopy(VALID)
+    for i in m["items"]:
+        i.pop("description", None)
+    out = build(approved(tmp_path, m), "C11", capsys)
+    assert "## Items" not in out and "- **I1" not in out
+    assert "- **T2**" in out                                      # a test description still prints
+    for t in m["tests"]:
+        t.pop("description", None)
+    assert "- **T2**" not in build(approved(tmp_path, m), "C11", capsys)
+
+
+def test_a_whole_app_test_is_listed_once(tmp_path, capsys):
+    m = copy.deepcopy(VALID)
+    E(m, "tests", "T3")["verifies"] = ["Q3", "Q2"]
+    out = build(approved(tmp_path, m), "C11", capsys)
+    assert out.count("| T3 ") == 1 and "| T3 Availability probe | manual | Q2 |" in out
 
 
 def test_spec_for_a_part_made_of_parts(tmp_path, capsys):

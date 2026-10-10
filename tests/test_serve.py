@@ -22,6 +22,9 @@ def changed_steps(edit):
 
 def test_fingerprint_covers_only_what_the_step_shows():
     assert changed_steps(lambda m: E(m, "tests", "T1").update(name="x")) == {6}
+    assert changed_steps(lambda m: E(m, "tests", "T2").update(description="x")) == {6}
+    assert changed_steps(lambda m: E(m, "items", "I1").update(description="x")) == {1, 2, 5}
+    assert changed_steps(lambda m: E(m, "items", "I5").update(description="x")) == {2, 5}
     assert changed_steps(lambda m: E(m, "requirements", "Q1").update(text="x")) == {1, 6}
     assert changed_steps(lambda m: E(m, "functions", "F11").update(runs_in="C12")) == {4}   # matching isn't step 2's call
     assert changed_steps(lambda m: E(m, "functions", "F11").update(name="x")) == {2, 4}

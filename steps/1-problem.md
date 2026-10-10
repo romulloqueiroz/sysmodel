@@ -12,7 +12,7 @@ Fix the design problem: how the app is used (scenarios), where it stops and what
 - `items` (inputs and outputs of the system, p. 151): only what crosses the boundary. Step 2 adds internal items.
 - `objectives` (objectives hierarchy, p. 154): `name`, `parent`, `weight` (0 to 1).
 - `requirements` (p. 137): `category`, `subcategory`, `stage`, `source`, `threshold`, `objective`, `parent` (for groups), `specifies` (system-wide ones only now).
-- The model cannot hold these, so put them in the hand-off message: the reason behind each requirement (p. 163), objective value ranges and value curves (p. 156), the feasibility argument (A1115), and every number you proposed that the engineer did not give.
+- The model cannot hold these, so write them to `decisions.md` under this step's heading: the reason behind each requirement (p. 163), objective value ranges and value curves (p. 156), the feasibility argument (A1115), and every number you proposed that the engineer did not give.
 
 ## Start from
 - The model has nothing yet. Read the engineer's brief, README, issues, API routes or OpenAPI file, deploy config, and any running app: existing systems shape the requirements (p. 134).
@@ -45,7 +45,7 @@ Fix the design problem: how the app is used (scenarios), where it stops and what
    - Drop means objectives (how: "use serverless", "add a cache") and strategic ones the app cannot settle ("grow brand awareness"). If one objective matters only because it improves another, it is a means (p. 154).
    - `weight` says how much a swing from an objective's worst acceptable to best likely value matters among its siblings (p. 156). The book's sibling weights add to 1 (p. 155). Weights are the stakeholders' values, not the engineer's guess (p. 156).
    - **Ask:** first what the app must be good at: offer the objectives you drafted, and let the engineer add or drop. Then: If you could improve only one of these, from the worst value you would accept to the best you expect, which first? How do you rank the rest?
-   - The value range per leaf has no field: its worst value goes in a linked requirement's `threshold`, its best as the design goal in that requirement's text; value curves go in the hand-off.
+   - The value range per leaf has no field: its worst value goes in a linked requirement's `threshold`, its best as the design goal in that requirement's text; value curves go in `decisions.md`.
    - Each leaf objective should be the `objective` of at least one requirement (Fig 6.4, p. 143).
 5. **Requirements** (A1114, pp. 137-146, 158-163)
    - Topics come from the scenarios, the externals and items, and the objectives (pp. 134, 159). Keep them at system level, not metasystem or parts (p. 134).
@@ -58,13 +58,13 @@ Fix the design problem: how the app is used (scenarios), where it stops and what
    - `source` points to a `sources` id, not a stakeholder: every requirement here traces to what a stakeholder said (p. 145). Leave `derived_from` empty; it is for requirements step 4 derives for the parts, and step 1's approval does not cover them.
    - Put every number in `threshold` with units (the worst acceptable value, p. 138), and the better value in the text as "The design goal is ..." (p. 146).
    - **Ask:** What is the worst value of X you would still accept, and beyond what value would you stop caring? What is the monthly running cost ceiling? When must the first release ship? Is any technology mandatory, and why?
-   - Never write TBD or TBR (R24). If the engineer says "you pick", write your value and list it in the hand-off as unconfirmed.
-   - Numbers that depend on real users (task time, error rate) come from a prototype and usability test with the app's actual users (pp. 158-159, Table 6.5). You cannot run one: draft a storyboard and mark those numbers as proposed in the hand-off.
+   - Never write TBD or TBR (R24). If the engineer says "you pick", write your value and list it in `decisions.md` as unconfirmed.
+   - Numbers that depend on real users (task time, error rate) come from a prototype and usability test with the app's actual users (pp. 158-159, Table 6.5). You cannot run one: draft a storyboard and mark those numbers as proposed in `decisions.md`.
 6. **Feasibility** (A1115, pp. 134, 136, 164)
    - Show that at least one design can meet all requirements together within the cost and date. Requirements that look fine alone often conflict (the book finds 5 to 20 unmet late, p. 134).
    - Check pairs with rough numbers (provider prices, typical latency, effort): cost ceiling vs availability or speed, deadline vs scope (if there is one), mandated technology vs a quality target.
    - A conflict goes back to 5, not forward (p. 135). **Ask:** These cannot both hold: X against Y. Which do you relax?
-   - Do not over-constrain: leave room for several designs (p. 132). Put the feasibility argument in the hand-off, one line per tight requirement.
+   - Do not over-constrain: leave room for several designs (p. 132). Put the feasibility argument in `decisions.md`, one line per tight requirement.
 7. **Qualification requirements** (A1116, pp. 137, 142, 162-163; step 6 builds the tests)
    - Write at least one `category: qualification` requirement per kind: `observance` (what data is collected for each io and system-wide requirement, and where: logs, probes, test runs), `verification-plan` (how the data shows the build meets the requirements), `validation-plan` (how it shows the app meets stakeholders' needs), `acceptance-plan` (what the stakeholders accept as proof).
    - The book treats the acceptance plan as the true exit: once stakeholders approve it, the rest is presumed defined well enough (p. 130). **Ask:** What would you need to see to say "yes, ship it"?

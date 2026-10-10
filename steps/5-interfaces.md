@@ -6,12 +6,12 @@ Decides every connection an item crosses, between two parts or between a part (o
 - `interfaces` (interface, pp. 266-267): `id`, `name`. Name the mechanism or standard it uses ("Public HTTP", "SQL over TCP"), not "API" or "link". Use `name` for the physical choice (A115.4).
 - `between` (external or internal interface, p. 267): exactly two ids. Each is a component, the system, or an external system. At least one must be the system or a component (R29). The ends decide the kind: an `external` end makes it an external interface. Two ends that talk over two mechanisms get two interfaces.
 - `carries` (items to be transported by the interface, p. 280): every item that crosses this connection, either direction. Direction is already in the jobs' `inputs` and `outputs`.
-- Step 5 writes `interfaces` only. The model cannot hold these, so put them in the hand-off message: candidate architectures and why one won, fault analysis, speed estimates, any custom design.
+- Step 5 writes `interfaces` only. The model cannot hold these, so write them to `decisions.md` under this step's heading: candidate architectures and why one won, fault analysis, speed estimates, any custom design.
 - Externals, items, jobs, parts and requirements belong to steps 1-4. Editing them makes those approvals stale, so where this guide says "propose and ask first", the engineer must agree before you write it.
 
 ## Start from
 - Step 1: `external` (`sends`/`receives`), `items`, `external-interface` requirements, performance requirements and their `threshold`s, `objectives`.
-- Step 2: each leaf job's `inputs` and `outputs`. Step 4: `runs_in`. Together they fix every flow: item X leaves part A and enters part B or an outside system. Step 2 may have deferred error-handling jobs (pp. 202-205); pick up that list if you have it.
+- Step 2: each leaf job's `inputs` and `outputs`. Step 4: `runs_in`. Together they fix every flow: item X leaves part A and enters part B or an outside system. Step 2 may have deferred error-handling jobs (pp. 202-205); pick up that list from step 2's section of `decisions.md`.
 - Run `sysmodel check --step 5` before writing anything. Each R30(b) finding is one flow, `producer -> consumer`, with the item named. Group the findings by pair of ends: each pair is a candidate interface.
 
 ## Do
@@ -22,7 +22,7 @@ Decides every connection an item crosses, between two parts or between a part (o
    - Objectives to compare candidates (A115.1.4): the book's example uses availability, fidelity, running cost and build cost (p. 281). Reuse `objectives` from step 1.
    - A gap means a new derived requirement (A115.1.5): `derived_from` the parent, `threshold` with units, io or system-wide. It changes what steps 4 and 6 cover (R25 will want a test), so propose it and ask first. **Ask:** How fast must X cross (response time), and how many per second at the busiest time? Never write TBD (R24).
 2. **Choose a high-level architecture per connection (A115.2, pp. 280-281).**
-   - If the other end fixes the interface (a browser, a third-party API) or a standard fits (HTTP, SQL), pick it and stop: the book skips the rest of the design then (p. 281). Standards bring swappable parts, more outside systems you can work with, lower cost and risk, longer life (p. 272). Most app connections end here. Say so in the hand-off.
+   - If the other end fixes the interface (a browser, a third-party API) or a standard fits (HTTP, SQL), pick it and stop: the book skips the rest of the design then (p. 281). Standards bring swappable parts, more outside systems you can work with, lower cost and risk, longer life (p. 272). Most app connections end here. Say so in `decisions.md`.
    - Otherwise list 2 or 3 candidates (A115.2.1) from the three generic styles (pp. 267-271):
 
      | Style | In an app | Book's fit and warning |
@@ -31,7 +31,7 @@ Decides every connection an item crosses, between two parts or between a part (o
      | Shared memory | shared database, cache or file both sides read and write | small requests on data mostly used by one side; warns of contention, copies drifting apart, poor scaling (p. 270); locks reset Mars Pathfinder (p. 282) |
      | Network | request and response between separate services | calls at any time, of any size, with built-in fault checking (pp. 269-270); layouts: pipeline, bus, hub-and-spoke, ring, mesh (p. 271) |
 
-   - Define a trial interface for each (A115.2.2), for example "queue, one worker". Score each against the performance, cost and trade-off requirements (A115.2.3). Choose one (A115.2.4); put the dropped candidates and reasons in the hand-off. **Ask:** when the requirements do not separate them: "X is faster but costs more per month; which matters more here?" Trade-offs follow stakeholder preferences (R28), not yours.
+   - Define a trial interface for each (A115.2.2), for example "queue, one worker". Score each against the performance, cost and trade-off requirements (A115.2.3). Choose one (A115.2.4); put the dropped candidates and reasons in `decisions.md`. **Ask:** when the requirements do not separate them: "X is faster but costs more per month; which matters more here?" Trade-offs follow stakeholder preferences (R28), not yours.
    - A winner that needs a part of its own (queue, broker, gateway) is a new component plus new jobs: propose and ask first, then connect each part to it with its own interface. With a shared bus a new part needs one connection, not one per existing part (p. 278).
 3. **Functional interface: fault detection and recovery (A115.3, p. 280; A115.3.3).**
    - A standard interface needs no jobs of its own (p. 281). A custom one may need jobs that make the hop work: connect, transfer, check errors, control flow, release (layer functions, p. 276; p. 279).
@@ -39,7 +39,7 @@ Decides every connection an item crosses, between two parts or between a part (o
    - The book's four fault jobs (pp. 203-204): detect the error (type and range checks, consistency checks, timers); confine the damage; recover (return to the last good state and tell the user, or end a job taking too long); isolate and report where it broke. Check what outside systems and users send before using it (p. 204).
    - Each is an ordinary job (`inputs`, `outputs`, `done_when`) that runs in a part. An interface cannot run a job. Adding them edits steps 2 and 4, so propose them and ask first. After they are approved, add their items to `carries`. **Ask:** Which failure at this connection would hurt users most: a lost item, a wrong item, or a slow one?
 4. **Physical interface (A115.4, p. 280).** Name the concrete mechanism: protocol, driver, queue product, file format. Candidates follow from the architecture chosen (A115.4.1); drop those the platform or a `technology` requirement rules out (A115.4.2).
-5. **Allocated interface (A115.5, p. 280).** `between` says which part holds each end. Check the choice against the speed and size numbers (A115.5.2) and keep the working in the hand-off. Write the final `interfaces` (A115.5.3-4).
+5. **Allocated interface (A115.5, p. 280).** `between` says which part holds each end. Check the choice against the speed and size numbers (A115.5.2) and keep the working in `decisions.md`. Write the final `interfaces` (A115.5.3-4).
 6. **Re-check.** Run `sysmodel check --step 5`. The book's exit test (p. 267): the interfaces fit the parts and meet the performance requirements. When parts or jobs change later, redo this step (p. 267).
 
 ## Good vs bad
@@ -57,7 +57,7 @@ Decides every connection an item crosses, between two parts or between a part (o
 | R29 (p. 61), error | an interface's two ends differ, and at least one is the system or a component | change an end: connect an outside system to a part, never to another outside system or to itself |
 | R30(b) (p. 57), error | every item that goes between two parts, or between a part and an outside system, is in `carries` of an interface whose ends cover both | add the item to an existing interface between those ends, or add one. If the flow itself is wrong (job in the wrong part), that is a step 4 fix: ask |
 
-R30(b) skips jobs with no `runs_in`, so a clean result means little until step 4 is done. A person signs off: no judgment item starts at this step; give the engineer your candidate comparison in the hand-off.
+R30(b) skips jobs with no `runs_in`, so a clean result means little until step 4 is done. A person signs off: no judgment item starts at this step; give the engineer your candidate comparison, written in `decisions.md`.
 
 ## Example
 ```yaml

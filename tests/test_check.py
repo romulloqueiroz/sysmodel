@@ -185,6 +185,15 @@ def test_s01_unknown_field():
     assert rules(m) == {"S01"}
 
 
+def test_item_and_test_descriptions_are_strings():
+    m = copy.deepcopy(VALID)
+    assert "S01" not in rules(m)
+    E(m, "items", "I1")["description"] = 5
+    E(m, "tests", "T1")["description"] = ["x"]
+    got = {f["element"] for f in sysmodel.check_model(m) if f["rule"] == "S01"}
+    assert got == {"items/0/description", "tests/0/description"}
+
+
 def test_s01_says_what_is_wrong_and_where():
     # Our own small checker covers each keyword schema.json uses.
     m = copy.deepcopy(VALID)

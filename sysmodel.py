@@ -655,6 +655,9 @@ def part_spec(m, comp, decisions, source):
             for o in in_order(c, [k[1] for k in cells if k[0] == i]):
                 out.append(f"| {named(c, i) if i else '(none)'} | {named(c, o)} | {names(c, cells[i, o][0])} | {names(c, cells[i, o][1])} |")
         out.append("")
+    used = in_order(c, [i for f in jobs for k in ("inputs", "outputs") for i in c.funcs[f].get(k) or [] if i in c.by])
+    if any(c.by[i][1].get("description") for i in used):
+        out += ["## Items", ""] + [f"- **{named(c, i)}**" + (f": {c.by[i][1]['description']}" if c.by[i][1].get("description") else "") for i in used] + [""]
     own, whole = [], []
     for r in c.leafreqs:
         got = reach(c, r)
@@ -672,11 +675,19 @@ def part_spec(m, comp, decisions, source):
         reqs += [x for r in whole for x in req_lines(c, r)] + [""]
     if reqs:
         out += ["## Requirements", ""] + reqs
-    mine = {r["id"] for r, _ in own}
-    tests = [t for t in c.m.get("tests") or [] if mine & set(t["verifies"])]
-    if tests:
-        out += ["## Tests", "", "| Test | Method | Proves |", "|---|---|---|"]
-        out += [f"| {named(c, t['id'])} | {t['method']} | {', '.join(i for i in t['verifies'] if i in mine)} |" for t in tests]
+    allt = c.m.get("tests") or []
+    groups = [("", {r["id"] for r, _ in own}), ("### Whole app", {r["id"] for r in whole})]
+    shown, tables = set(), []
+    for title, ids in groups:
+        tests = [t for t in allt if ids & set(t["verifies"]) and t["id"] not in shown]
+        shown |= {t["id"] for t in tests}
+        if tests:
+            tables += ([title, ""] if title else []) + ["| Test | Method | Proves |", "|---|---|---|"]
+            tables += [f"| {named(c, t['id'])} | {t['method']} | {', '.join(i for i in t['verifies'] if i in ids)} |" for t in tests] + [""]
+            said = [f"- **{t['id']}** {t['description']}" for t in tests if t.get("description")]
+            tables += said + [""] if said else []
+    if tables:
+        out += ["## Tests", ""] + tables
     return "\n".join(out).rstrip()
 
 VENDOR = {  # what the page loads from the web, and the offline copy in vendor/ that `serve` uses instead

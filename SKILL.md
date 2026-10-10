@@ -31,6 +31,10 @@ Run `python3 ${CLAUDE_SKILL_DIR}/sysmodel.py <command> <model>`:
 - **Answers**: `answers.md` next to the model. After each round of questions, append the date, each question and the
   engineer's answer, word for word. A source that is a conversation points here (title it `answers.md, <date>`), so a
   later session can tell what the engineer said from what you proposed.
+- **Decisions**: `decisions.md` next to the model, one `## Step N Name` heading per step. Under it, what the step's guide says
+  the model can't hold: the pick, the runner-up and why; assumptions; risks and estimates; warnings left on purpose, with the
+  reason; work deferred to a later step; proposed changes waiting for a yes, each marked open, done or declined; open questions.
+  Update the step's section each round and keep it short. Unlike `answers.md` (the engineer's words only), this is the AI's record.
 - **Reviews**: `<model>.review.yaml` next to the model, written by `serve` when a person clicks Approve or Send back.
   Read it for the notes. **Never edit it.**
 
@@ -51,7 +55,7 @@ Read the step's guide before working on it. Each says what the step fills in, wh
 
 1. Run `status`. Work on the **Next** step when it is the AI's turn. When it waits for a person, say so and stop; work
    ahead on a later step only if the engineer asks. When all six are approved, go to Building.
-2. Read that step's guide, then the model.
+2. Read that step's guide, then the model and `decisions.md`.
 3. If the step was sent back, the note is your task list. Handle every point in it; ask about any point you don't understand.
 4. Ask the engineer what only they can know: users, priorities, thresholds, budgets, any fixed date. Don't invent these
    facts, and don't park them as TBD (rule R24).
@@ -72,7 +76,7 @@ Read the step's guide before working on it. Each says what the step fills in, wh
    - Without the AskUserQuestion tool, ask the same small rounds as a numbered list with the suggested answers.
 5. Edit the model. Keep ids stable: links and approvals hang on them. For a new model use short ids like the example's (`Q1`, `F11`, `C2`);
    otherwise follow the style already in the file.
-6. Run `check --step N` until nothing must be fixed. Read the warnings: fix them, or say in the hand-off why they stay.
+6. Run `check --step N` until nothing must be fixed. Read the warnings: fix them, or say in `decisions.md` why they stay.
 7. Run `status` and confirm the step now waits for a person.
 8. Hand off (below).
 
@@ -113,7 +117,8 @@ Only when `status` says all six steps are approved.
 
 ## Hand-off
 
-After each round, tell the engineer, in plain words and briefly:
+After each round, first write its content into `decisions.md`. Then tell the engineer in chat, in plain words and briefly;
+the full detail is in `decisions.md`:
 
 - what you added or changed, by step;
 - what you assumed, and the questions still open;

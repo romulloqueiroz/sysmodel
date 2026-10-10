@@ -9,11 +9,15 @@ external:
   - {id: E1, name: Web visitor, kind: external, sends: [I1, I3], receives: [I2, I4]}
   - {id: E2, name: Build pipeline, kind: enabling}
 items:
-  - {id: I1, name: Long URL}
+  - id: I1
+    name: Long URL
+    description: "The URL to shorten: an absolute http or https URL, 1 to 2000 characters. Example: https://example.com/spring-sale?utm=mail"
   - {id: I2, name: Short link}
   - {id: I3, name: Short code}
   - {id: I4, name: Redirect}
-  - {id: I5, name: Link record}
+  - id: I5
+    name: Link record
+    description: "What is stored per link: code (6 characters, a-z0-9), target URL, created at (UTC time). Example: {code: k3x9qa, target: https://example.com, created: 2026-10-10T09:00Z}"
   - {id: I6, name: Stored target}
 requirements:
   - {id: Q0, text: Functional requirements}
@@ -65,6 +69,10 @@ interfaces:
   - {id: IF2, name: Storage access, between: [C1, C2], carries: [I5, I6]}
 tests:
   - {id: T1, name: Create link end to end, method: automated, verifies: [Q1]}
-  - {id: T2, name: Long URL accepted, method: automated, verifies: [Q2]}
+  - id: T2
+    name: Long URL accepted
+    method: automated
+    verifies: [Q2]
+    description: "Submit a 2000-character URL: a short link comes back. Submit 2001 characters: refused with an error, nothing stored."
   - {id: T3, name: Availability probe, method: manual, verifies: [Q3]}
   - {id: T4, name: Monthly bill review, method: manual, verifies: [Q4]}

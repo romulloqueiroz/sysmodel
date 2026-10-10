@@ -62,7 +62,8 @@
     "item": {
       "description": "Something that flows between functions or across the system boundary (data, event, file, request).",
       "type": "object", "required": ["id", "name"], "additionalProperties": false,
-      "properties": {"id": {"$ref": "#/$defs/id"}, "name": {"type": "string"}}
+      "properties": {"id": {"$ref": "#/$defs/id"}, "name": {"type": "string"},
+                     "description": {"type": "string", "description": "What the item holds: its fields, format and limits, with one example."}}
     },
     "requirement": {
       "description": "A requirement, or a group of requirements if other requirements name it as parent.",
@@ -115,7 +116,8 @@
       "type": "object", "required": ["id", "name", "method", "verifies"], "additionalProperties": false,
       "properties": {"id": {"$ref": "#/$defs/id"}, "name": {"type": "string"},
                      "method": {"enum": ["automated", "manual"]},
-                     "verifies": {"$ref": "#/$defs/ids", "minItems": 1}}
+                     "verifies": {"$ref": "#/$defs/ids", "minItems": 1},
+                     "description": {"type": "string", "description": "What the test does and expects: the setup or input, the action, and the expected result with values."}}
     }
   }
 }

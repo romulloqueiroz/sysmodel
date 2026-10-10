@@ -5,9 +5,10 @@ Decides how each requirement gets proven, by whom, and what counts as a pass. It
 ## Fills in
 - `tests` (verification requirement, p. 59; qualification activity, p. 298): `id`, `name`. One thing that is run or checked. Name what is exercised and the pass line, for example "Availability probe, 30 days, at least 99.9%". The book's test requirements likewise give counts and how a result is judged (p. 316).
 - `method` (qualification method, Table 11.3, p. 301): the book's four become two. `automated`: a script decides pass or fail and anyone can rerun it (the book's instrumented test). `manual`: a person performs or judges it (inspection, demonstration, analysis, user trial).
+- `description` (optional): the setup or input, the action, and the expected result with values, for a positive and a negative case. The `name` stays short; the description carries the values. For T2: "Submit a 2000-character URL: a short link comes back. Submit 2001 characters: refused with an error, nothing stored." The build spec prints it.
 - `verifies` (qualifies, p. 142): the requirement ids this test proves. One test may prove several; a requirement may need several tests.
-- The pass line has no field: it is the requirement's `threshold` (or the number in its text), plus trial counts or duration in the test `name`.
-- The model cannot hold these, so put them in the hand-off message: the kind of each test (verification, validation or acceptance), steps and data of manual tests, the test environment and stand-ins for outside systems, risks to finishing the tests, what you skipped.
+- The pass line has no field of its own: it is the requirement's `threshold` (or the number in its text), plus trial counts or duration in the test `name`; the expected result with values goes in `description`.
+- The model cannot hold these, so write them to `decisions.md` under this step's heading: the kind of each test (verification, validation or acceptance), steps and data of manual tests, the test environment and stand-ins for outside systems, risks to finishing the tests, what you skipped.
 - Tests change only step 6. A new requirement also changes step 1: propose it and ask first.
 
 ## Start from
@@ -16,7 +17,7 @@ Decides how each requirement gets proven, by whom, and what counts as a pass. It
 - Run `sysmodel check --step 6`. The test plan table in `sysmodel serve` shows each requirement as Covered, Needs a test (io and system-wide) or Optional (trade-off and qualification).
 
 ## Do
-1. **Pass lines (A116.P1.1-P1.3, p. 297).** The objectives drive what you prove. Take each pass line from the requirement's `threshold`. The book wants it neither too low (the test proves nothing) nor too high (money spent fixing what is not worth fixing, p. 297). When a measured requirement has no threshold, **Ask:** What is the least that counts as a pass for X? A threshold change edits step 1. If you cannot say what pass or fail looks like, the requirement is not testable (p. 287, R27): propose a rewrite and send it back to step 1.
+1. **Pass lines (A116.P1.1-P1.3, p. 297).** The objectives drive what you prove. Take each pass line from the requirement's `threshold`, and write the expected result with values in the test's `description`. The book wants it neither too low (the test proves nothing) nor too high (money spent fixing what is not worth fixing, p. 297). When a measured requirement has no threshold, **Ask:** What is the least that counts as a pass for X? A threshold change edits step 1. If you cannot say what pass or fail looks like, the requirement is not testable (p. 287, R27): propose a rewrite and send it back to step 1.
 2. **Qualification requirements (A116.P1.5, p. 297; categories p. 142).** Step 1 should have written them. Your tests carry them out:
 
    | `subcategory` | Question | Run by | Usual tests |
@@ -43,6 +44,7 @@ Decides how each requirement gets proven, by whom, and what counts as a pass. It
 - Every requirement tested individually (p. 297); only single, clear, checkable statements can be verified (p. 287).
 - Verification alone does not show the right app; the two chains of checks are only as strong as their weakest link (pp. 287, 306).
 - No one procedure answers every question, so use complementary tests (p. 295).
+- Write a `description` for every test: setup or input, action, expected result with values, positive and negative case.
 - Bad: `name: Works well` verifying Q3. Good: `name: Availability probe, 30 days, at least 99.9%`.
 - Bad: `method: manual` for "Long URL accepted". Good: `automated`, since a script can decide.
 - Bad: one test "Everything" verifying five unrelated requirements. Good: a test per requirement or tight group, so a failure says where.
@@ -52,7 +54,7 @@ Decides how each requirement gets proven, by whom, and what counts as a pass. It
 |---|---|---|
 | R25 (p. 142), error | every leaf io and system-wide requirement is in some test's `verifies` | add a test; if no test can pass or fail, rewrite the requirement in step 1 (ask) |
 
-Earlier rules still apply: S03 (`verifies` must point at requirements) and R04 (step 1: a group is never tested). A person signs off: no judgment item starts at this step. In the hand-off, say which tests are verification, validation and acceptance, and what you skipped.
+Earlier rules still apply: S03 (`verifies` must point at requirements) and R04 (step 1: a group is never tested). A person signs off: no judgment item starts at this step. In `decisions.md`, say which tests are verification, validation and acceptance, and what you skipped.
 
 ## Example
 ```yaml
@@ -62,7 +64,11 @@ scenarios:                       # from step 1
     steps: ["Marketer submits a long URL", "System returns a short link", "Visitor opens it", "System redirects the visitor"]
 tests:                           # T1-T4 as in valid.yaml; T3 and T4 now carry their pass lines
   - {id: T1, name: Create link end to end, method: automated, verifies: [Q1]}
-  - {id: T2, name: Long URL of 2000 characters accepted, method: automated, verifies: [Q2]}
+  - id: T2
+    name: Long URL of 2000 characters accepted
+    description: "Submit a 2000-character URL: a short link comes back. Submit 2001 characters: refused with an error, nothing stored."
+    method: automated
+    verifies: [Q2]
   - {id: T3, name: "Availability probe, 30 days, at least 99.9%", method: manual, verifies: [Q3]}
   - {id: T4, name: Cloud bill for one month under 20 USD, method: manual, verifies: [Q4]}
   - {id: T5, name: "SC1 walk-through: create link, open it, land on target", method: automated, verifies: [Q1]}

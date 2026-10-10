@@ -6,17 +6,18 @@ Open the black box from step 1: one tree of jobs (functions, p. 178), the items 
 - `functions` (functional decomposition, p. 179): `id`, `name`, `parent`. One function has no parent (the system function, p. 51); the rest hang under it. A leaf has no children.
 - `functions[].inputs` / `outputs` (inputs and outputs, p. 178): item ids. Fill them on leaves; the checks read only leaves, so on parents they are optional.
 - `functions[].done_when` (completion criterion for an exit, pp. 58, 178): when a leaf function is finished.
-- `items` (items and data model, pp. 53, 181): `id`, `name`. Step 1 made the boundary items; you add the internal ones.
+- `items` (items and data model, pp. 53, 181): `id`, `name`, and optionally `description`. Step 1 made the boundary items; you add the internal ones.
+- `items[].description` (data model, p. 181): what the item holds: its fields, format and limits, with one example. The build spec prints it. Write one for every item that carries data.
 - `requirements[].specifies` (traced to, p. 59): on io requirements, the functions and items they are about.
 - Do not set `runs_in`; that is step 4.
-- The model cannot hold these, so put them in the hand-off message: simple functionalities, alternative decompositions, item fields and relations (data model), operating modes and states, deferred error-handling functions. It has no control or trigger link either: list those items under `inputs` and name them so the role shows (`Redirect request`, `Rate-limit setting`; p. 53).
+- The model cannot hold these, so write them to `decisions.md` under this step's heading: simple functionalities, alternative decompositions, relations between items, operating modes and states, deferred error-handling functions. It has no control or trigger link either: list those items under `inputs` and name them so the role shows (`Redirect request`, `Rate-limit setting`; p. 53).
 
 ## Start from
 - Read from step 1: `scenarios` (steps), `external` (`sends`/`receives`), the boundary `items`, and io `requirements` (input, output, external-interface, functional).
 - Functional requirements are the book's first-level functions (pp. 141, 317). Start the top split from them. Changing the first level means changing them too, which is a step 1 edit: say so.
 
 ## Do
-1. **Simple functionalities (A1121, pp. 179-181).** For each scenario write the chain one input follows to one output: external input, function, item, function, ... external output (p. 179). Many small chains with plain verb-object names; they are low-level functions (p. 182). They are working notes (no field); do not edit `scenarios`. Use them to find functions now and to test the draft in 3. Put one chain per scenario in the hand-off.
+1. **Simple functionalities (A1121, pp. 179-181).** For each scenario write the chain one input follows to one output: external input, function, item, function, ... external output (p. 179). Many small chains with plain verb-object names; they are low-level functions (p. 182). They are working notes (no field); do not edit `scenarios`. Use them to find functions now and to test the draft in 3. Put one chain per scenario in `decisions.md`.
 2. **Draft the tree and wire the flows (A1122, pp. 181-185, 200-202).**
    - Root: one function, the system's whole job, named from `system.purpose`. It stands for everything the system takes in and gives out (p. 51).
    - First level: 2 to 7 functions (p. 141), from the functional requirements. Split by one of these keys (pp. 183-185): operating modes (if the app has any), outputs, inputs, stimulus-response threads (the book's preferred key), or the six generic jobs (p. 184): user interface, validate and format inputs, core transform, control processing, format outputs, maintenance and self-test (health checks, logging, backup). The system's objectives can guide the split too (p. 185).
@@ -30,12 +31,12 @@ Open the black box from step 1: one tree of jobs (functions, p. 178), the items 
    - Look for shortfalls (no function for some input; an output nobody produces; no feedback; pp. 192-193) and overlaps (two functions doing one job; p. 193).
    - For each leaf list the unwanted inputs (malformed, too large, duplicate, unauthorized, dependency down; p. 192) and check something answers each. Add a function and an output item (for example `Error response`) where nothing does. **Ask:** For `<unwanted input>`, should the app reject it, ignore it, retry, or alert someone?
    - Feedback (pp. 189-190, 193): for each key output, name the item that shows whether it worked (acknowledgement, error, status).
-   - Go through Sidebar 7.2 (p. 201); see Good vs bad. Try one alternative split and keep the better (pp. 200-201); list the alternative in the hand-off.
-4. **Data model (A1123, pp. 181, 202).** The items are the data model. Review the item list for missing or redundant items (p. 200). Name items with nouns (p. 201). Every item comes from an external or a leaf and goes to an external or a leaf. The model keeps no fields or relations, but sketching them often exposes design issues the function view hid (p. 202): put what you find in the hand-off. **Ask:** when a business rule appears: can one long URL have several short codes? Do codes expire?
+   - Go through Sidebar 7.2 (p. 201); see Good vs bad. Try one alternative split and keep the better (pp. 200-201); list the alternative in `decisions.md`.
+4. **Data model (A1123, pp. 181, 202).** The items are the data model. Review the item list for missing or redundant items (p. 200). Name items with nouns (p. 201). Every item comes from an external or a leaf and goes to an external or a leaf. The model keeps no relations, but sketching them often exposes design issues the function view hid (p. 202): put what you find in `decisions.md`. Put each item's fields, format and limits in its `description`. **Ask:** when a business rule appears: can one long URL have several short codes? Do codes expire? Business rules a job follows (how codes are made, uniqueness, expiry, what repeats do) are decisions about behaviour: write each as an io requirement, so it reaches the spec and gets a test.
 5. **Complete the models (A1124, pp. 178, 181, 201-205).**
    - `done_when` on every leaf: the observable result that ends it (exit criterion, p. 178). Name each way it can end (`Short link returned; or error response returned`). A time or size limit belongs in an io requirement (Table 6.2, p. 140). Propose each one; the engineer confirms.
-   - External match (R10): every item an external `sends` is an input of some leaf; every item it `receives` is an output of some leaf. Fix the function wiring first; change `external` only if step 1 was wrong, and say so.
-   - Error handling (pp. 202-205): add input error trapping now (check type and range, tell the user, ask again). Error detection, damage confinement, recovery and fault reporting depend on the parts (p. 202): add what you can, list what you deferred.
+   - External match (R10): every item an external `sends` is an input of some leaf; every item it `receives` is an output of some leaf. Fix the function wiring first; change `external` only if step 1 was wrong, and say so. Settings and secrets a part needs (an API token, a base URL) are items sent by an enabling external (the deploy setup) to the job that needs them.
+   - Error handling (pp. 202-205): add input error trapping now (check type and range, tell the user, ask again). Error detection, damage confinement, recovery and fault reporting depend on the parts (p. 202): add what you can, list what you deferred in `decisions.md`.
    - Review (pp. 181, 201): the book has other engineers and stakeholders critique the draft for missing functions and other splits. Hand the engineer the tree, the scenario chains and the alternative split. **Ask:** Who else should look at this tree?
 6. **Trace io requirements (A1125, pp. 182, 205-207).** Set `specifies` on each leaf requirement:
    - input or output: the item and the leaf that receives or produces it (pp. 59, 205). The book also traces to every ancestor of that leaf; the tree already implies them, so do not list them.
@@ -48,6 +49,7 @@ Open the black box from step 1: one tree of jobs (functions, p. 178), the items 
 - Name = verb + object, no goal word (p. 201): `Maximize redirect speed` -> `Redirect visitor`. Items are nouns: `Create link` -> `Link record`.
 - Partition (p. 102; R12): each thing the parent does belongs to one child, none left out; siblings sit at one level (p. 201); a function is never its own child.
   Bad: root children [`Create short link`, `Query the database`, `Redirect visitor`], where the query is a step inside the other two. Good: [`Handle requests`, `Store links`], with the database work under `Store links`.
+- Bad: F2 gives I6 Stored target with nothing going in. Good: a job that looks data up takes an item that carries the key (I3 Short code).
 - Gap: Q2 limits URLs to 2000 characters but nothing returns an error for a longer one (pp. 192-193): add a function or output.
 - Model the system, not the externals (p. 201): `Visitor clicks link` is the visitor's job; the system's is `Redirect visitor`.
 - Conserve (pp. 182, 201): the leaves together take from outside exactly what the system takes and give exactly what it gives; none added, none dropped.
@@ -72,9 +74,9 @@ A person signs off: **R12** (p. 102), each function's subfunctions partition its
 ## Example
 ```yaml
 items:                      # I1-I4 came from step 1; I5-I6 are internal
-  - {id: I1, name: Long URL}
+  - {id: I1, name: Long URL, description: "The URL to shorten: an absolute http or https URL, 1 to 2000 characters. Example: https://example.com/spring-sale?utm=mail"}
   - {id: I2, name: Short link}
-  - {id: I3, name: Short code}
+  - {id: I3, name: Short code, description: "The key of a link: 6 characters from a-z and 0-9, unique. Example: k3x9qa"}
   - {id: I4, name: Redirect}
   - {id: I5, name: Link record}
   - {id: I6, name: Stored target}

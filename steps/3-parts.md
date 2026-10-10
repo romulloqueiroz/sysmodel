@@ -6,7 +6,7 @@ Decide the parts the app is built from: a tree of components (p. 210) from the s
 - `components[]` (physical architecture, p. 210): one entry per part: `id`, `name`, `parent`, `choice`.
 - `parent` (decomposition, p. 210): the system id for first-level parts, a component id below. A component that nobody names as `parent` is a leaf (a configuration item).
 - `choice`: the option the chosen alternative uses for that part (a product, language or service, such as SQLite), so the build spec can say what to build it with. `name` stays the role. Leave it out where no option was picked.
-- Nothing else. The generic architecture, the morphological box, the alternatives and the reason for the pick have no field. They go in your hand-off message (Do 7).
+- Nothing else. The generic architecture, the morphological box, the alternatives and the reason for the pick have no field. They go in `decisions.md` (Do 7).
 
 ## Start from
 - Step 2: `functions`. Every leaf function needs a home (p. 211); the first-level functions guide the first-level parts (p. 214).
@@ -25,7 +25,7 @@ Decide the parts the app is built from: a tree of components (p. 210) from the s
    The pick is provisional: step 4 may send you back here (p. 216). Propose the pick; the engineer confirms at approval.
 5. **Write the tree** (p. 210, 214). Put the chosen alternative's parts in `components`. `name` is the role ("Database"); put the chosen alternative's option for that part in `choice` ("SQLite"). If the engineer wants a product to be binding, that is a technology requirement, which edits step 1: propose it and ask first. Go down only as far as the leaf functions need: step 4 warns about a leaf part that no function runs in.
 6. **Check the partition** (R13, p. 102). For each level, write one line per part saying what it owns. No two parts may own the same thing (overlap) and nothing the app must do may be owned by none (gap). Fix both before the hand-off.
-7. **Hand-off content.** The model keeps only the pick, so present: the generic parts, the box (columns and options), the alternatives with their themes, how each did on the four issues, the combinations you ruled out, the pick and why it beat the others, and any step 1 or 2 change you propose.
+7. **Decisions content.** The model keeps only the pick, so write to `decisions.md` under this step's heading: the generic parts, the box (columns and options), the alternatives with their themes, how each did on the four issues, the combinations you ruled out, the pick and why it beat the others, and any step 1 or 2 change you propose.
 
 ## Good vs bad
 - Generic first, instances second (p. 211, 213). Bad: parts named `Redis`, `Express`, `Vercel`. Good: `name: Cache, choice: Redis`, `name: Web service, choice: Express`, `name: Hosting, choice: Vercel`; the products are options in the box, and the pick goes in `choice`.
@@ -45,7 +45,7 @@ Step 4 will later warn R16 (leaf part with no function) and advise R17 (first-le
 A person signs off: R13 (p. 102), the component breakdown is a partition.
 
 ## Example
-Hand-off sketch for the URL shortener (not stored in the model):
+`decisions.md` sketch for the URL shortener (not stored in the model):
 ```
 Box:  Web service        | Datastore         | Hosting
       one server process | file database     | one virtual machine

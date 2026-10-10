@@ -972,7 +972,7 @@ dl.facts dd { margin: 0; min-width: 0; display: flex; flex-wrap: wrap; gap: 4px;
       add("Jobs", links(jobs)); add("Connections", links(ifacesOf(id))); add("Requirements", links(reqsOn(id))); }
     if (k === "external") { add("Type", KIND[e.kind][0]); add("Sends", links(e.sends)); add("Receives", links(e.receives)); add("Connections", links(ifacesOf(id))); }
     if (k === "item") {
-      add("Made by", links(itemFlows.filter(f => f[2] === id).map(f => f[0]).filter((x, i, a) => a.indexOf(x) === i)));
+      add("Holds", e.description); add("Made by", links(itemFlows.filter(f => f[2] === id).map(f => f[0]).filter((x, i, a) => a.indexOf(x) === i)));
       add("Used by", links(itemFlows.filter(f => f[2] === id).map(f => f[1]).filter((x, i, a) => a.indexOf(x) === i)));
       add("Carried by", links(list("interfaces").filter(i => i.carries.includes(id)).map(i => i.id))); add("Requirements", links(reqsOn(id))); }
     if (k === "interface") { add("Between", links(e.between)); add("Carries", links(e.carries)); }
@@ -982,7 +982,7 @@ dl.facts dd { margin: 0; min-width: 0; display: flex; flex-wrap: wrap; gap: 4px;
       add("Belongs here", links(list("requirements").filter(r => r.parent === id).map(r => r.id))); }
     if (k === "objective") { add("Part of", e.parent ? link(e.parent) : null); add("Weight", e.weight != null ? `${Math.round(e.weight * 100)}%` : null);
       add("Smaller objectives", links(okids(id))); add("Requirements", links(list("requirements").filter(r => r.objective === id).map(r => r.id))); }
-    if (k === "test") { add("How", e.method === "automated" ? "Automated test" : "Manual check"); add("Proves", links(e.verifies)); }
+    if (k === "test") { add("Checks", e.description); add("How", e.method === "automated" ? "Automated test" : "Manual check"); add("Proves", links(e.verifies)); }
     if (k === "source") { add("Title", e.title); add("From", e.stakeholder ? link(e.stakeholder) : null); }
     if (k === "scenario") add("Steps", h("ol", { style: "margin:0;padding-left:1.2em" }, e.steps.map(t => h("li", {}, t))));
     return F;
