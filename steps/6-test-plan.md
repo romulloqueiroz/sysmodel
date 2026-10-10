@@ -14,6 +14,7 @@ Decides how each requirement gets proven, by whom, and what counts as a pass. It
 
 ## Start from
 - Step 1 `requirements`: leaf io and system-wide ones need tests (R25). Read their `threshold`s, the qualification requirements (`observance`, `verification-plan`, `validation-plan`, `acceptance-plan`), `scenarios` and `objectives`.
+- Read the `### For step 6` notes in `decisions.md` (work earlier steps deferred to this one).
 - Step 5 `interfaces` and any fault-handling jobs: they need tests too.
 - Run `sysmodel check --step 6`. The test plan table in `sysmodel serve` shows each requirement as Covered, Needs a test (io and system-wide) or Optional (trade-off and qualification).
 
@@ -28,7 +29,7 @@ Decides how each requirement gets proven, by whom, and what counts as a pass. It
    | `validation-plan` | right app? Meets the operational concept and the stakeholders' performance, cost and trade-off needs (pp. 142, 285) | development team | whole-scenario runs, cost check |
    | `acceptance-plan` | do the stakeholders accept it? (p. 285) | stakeholders, real users | manual trial of key tasks |
 
-   Verification, validation and acceptance overlap in time; none waits for the one before to end (p. 287). If a kind is missing, draft one line and ask first. **Ask:** Who will try the finished app, and what must they manage to do for you to accept it?
+   Verification, validation and acceptance overlap in time; none waits for the one before to end (p. 287). If a kind is missing, draft one line (propose it; the engineer confirms in review). **Ask:** Who will try the finished app, and what must they manage to do for you to accept it?
 3. **Cover every io and system-wide requirement (A116.P1.8, pp. 297-298; R25).** The book wants every requirement tested individually (p. 297). This tool requires a test for each leaf io and system-wide requirement (see 9 for the rest). Never test a group (R04).
    - io requirement: functional (black-box) test, right output for a given input. Positive cases come from the requirements; negative cases try inputs the requirements missed (Table 11.6, p. 303).
    - system-wide requirement: structural test of performance, recovery, stress, security or availability (Table 11.4, p. 302).

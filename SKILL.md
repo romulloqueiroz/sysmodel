@@ -14,12 +14,15 @@ You never approve anything yourself.
 
 Run `python3 ${CLAUDE_SKILL_DIR}/sysmodel.py <command> <model>`:
 
-- `status`: whose turn each step is (DONE, AI, PERSON) and the next step. **Run it first, every time.**
+- `status`: whose turn each step is (DONE, AI, PERSON) and the next step, and `Review app: <url>` or `not running; start serve`.
+  **Run it first, every time.**
 - `check --step N`: rule problems for steps 1..N, each with the book page. Exits 1 while anything must be fixed.
 - `serve`: the review app where people see the pictures and approve or send back each step. It runs until stopped, so
   start it in the background, once per session, and give the engineer the URL it prints. It reloads by itself when the model changes.
-- `wait`: blocks until a person approves or sends back a step in `serve`, then prints the decision and the note.
-  Start it in the background after each hand-off; when it ends, you are woken to carry on, with no prompt needed.
+- `wait`: when it starts it records the hand-off (which steps are ready for review); the page lets the engineer approve only
+  those steps. It then blocks until a person approves or sends back a step in `serve`, and prints the decision and the note.
+  Start it in the background right after your edits and **before** the hand-off message; when it ends, you are woken to carry on,
+  with no prompt needed. It exits with code 2 if `serve` stopped.
 - `render`: a static HTML snapshot next to the model, for sharing. Read-only.
 - `spec <model> <component>`: the build spec for one part: its scenarios, jobs, connections, requirements and tests, taken from
   the model. It refuses until all six steps are approved.
@@ -35,8 +38,11 @@ Run `python3 ${CLAUDE_SKILL_DIR}/sysmodel.py <command> <model>`:
   later session can tell what the engineer said from what you proposed.
 - **Decisions**: `decisions.md` next to the model, one `## Step N Name` heading per step. Under it, what the step's guide says
   the model can't hold: the pick, the runner-up and why; assumptions; risks and estimates; warnings left on purpose, with the
-  reason; work deferred to a later step; proposed changes waiting for a yes, each marked open, done or declined; open questions.
-  Update the step's section each round and keep it short. Unlike `answers.md` (the engineer's words only), this is the AI's record.
+  reason; work deferred to a later step; proposed changes waiting for a yes; open questions.
+  Update the step's section each round and keep it short. Proposals that need a yes (a change to an approved step, anything a
+  guide says to "propose and ask first") are bullets under `### Waiting for your yes` in the step's section; the review page
+  shows them at the top. When one is answered, move it to done or declined. Work deferred to a later step goes under
+  `### For step N` in the deferring step's section. Open questions are only facts the engineer can't know yet. Unlike `answers.md` (the engineer's words only), this is the AI's record.
 - **Reviews**: `<model>.review.yaml` next to the model, written by `serve` when a person clicks Approve or Send back.
   Read it for the notes. **Never edit it.**
 
@@ -56,9 +62,12 @@ Read the step's guide before working on it. Each says what the step fills in, wh
 ## The loop
 
 1. Run `status`. Work on the **Next** step when it is the AI's turn. When it waits for a person, say so, start `wait` in the background and stop; work
-   ahead on a later step only if the engineer asks. When all six are approved, go to Building.
+   ahead on a later step only if the engineer asks. When all six are approved, go to Building. If `status` says the review
+   app is not running, start `serve` first.
 2. Read that step's guide, then the model and `decisions.md`.
-3. If the step was sent back, the note is your task list. Handle every point in it; ask about any point you don't understand.
+3. Every review note, approved or sent back, is copied word for word into `answers.md` with the date, and acted on: an approval
+   note can ask for changes too. If the step was sent back, the note is your task list. Handle every point in it; ask about any
+   point you don't understand.
 4. Ask the engineer what only they can know: users, priorities, thresholds, budgets, any fixed date. Don't invent these
    facts, and don't park them as TBD (rule R24).
    - The guide's **Ask:** lines are a list to choose from, not a script. Skip what the brief, the repo or an earlier
@@ -74,20 +83,24 @@ Read the step's guide before working on it. Each says what the step fills in, wh
      a proposal to the engineer's answers. A requirement with any proposed part (a limit, a design goal, a detail,
      weights you turned from a ranking) takes the proposal source.
    - Before the hand-off, ask a last round about anything still open that only the engineer can decide (scope,
-     who may do what). Don't leave it as an open question for the review.
+     who may do what). Never park these for the review or defer them to a later step.
    - Without the AskUserQuestion tool, ask the same small rounds as a numbered list with the suggested answers.
 5. Edit the model. Keep ids stable: links and approvals hang on them. For a new model use short ids like the example's (`Q1`, `F11`, `C2`);
    otherwise follow the style already in the file.
 6. Run `check --step N` until nothing must be fixed. Read the warnings: fix them, or say in `decisions.md` why they stay.
 7. Run `status` and confirm the step now waits for a person.
-8. Hand off (below), then start `wait` in the background. When it ends, start again at 1.
+8. Write `decisions.md`, start `wait` in the background, then hand off in chat (below). Starting `wait` first matters: the page
+   accepts an approval only for steps it handed off. If `wait` exits 2, start `serve` again, then `wait`. When it ends, start
+   again at 1.
 
 ## Approved steps are a baseline
 
 An approval covers exactly what that step decided. Changing it makes the approval stale, and the step needs another review.
 Before you change anything an approved step covers, tell the engineer which steps would need re-approval and why, and wait
-for a yes, unless they asked for that very change. A step's own additions don't undo earlier approvals: new internal
-items and `specifies` links in step 2, `runs_in` and derived requirements in step 4. Which steps cover what:
+for a yes, unless they asked for that very change. A review note that asks for a change to an earlier step counts as asking
+   for that change. A step's own additions don't undo earlier approvals: new internal
+items and `specifies` links in step 2, `runs_in` and derived requirements in step 4. After editing anything an approved step covers, run `check` (all steps) and `status`, and list in the hand-off
+which steps went stale. Which steps cover what:
 
 | Piece of the model | Steps |
 |---|---|
@@ -97,11 +110,11 @@ items and `specifies` links in step 2, `runs_in` and derived requirements in ste
 | `items` an external system sends or receives | 1, 2, 5 |
 | other `items` | 2, 5 |
 | `requirements` without `derived_from` (all fields but `specifies`) | 1, 6 |
-| `requirements` with `derived_from` (all fields but `specifies`) | 4, 6 |
-| `specifies` links to the system | 1 |
-| `specifies` links to functions and items | 2 |
-| `specifies` links to components | 4 |
-| `specifies` links to interfaces | 5 |
+| `requirements` with `derived_from` (all fields) | 4, 6 |
+| `specifies` links of requirements without `derived_from` to the system | 1 |
+| `specifies` links of requirements without `derived_from` to functions and items | 2 |
+| `specifies` links of requirements without `derived_from` to components | 4 |
+| `specifies` links of requirements without `derived_from` to interfaces | 5 |
 | `functions` (all fields but `runs_in`) | 2, 4 |
 | `runs_in` | 4 |
 | `components` | 3, 4, 5 |
@@ -112,20 +125,23 @@ items and `specifies` links in step 2, `runs_in` and derived requirements in ste
 
 Only when `status` says all six steps are approved.
 
-1. Build the smallest parts first, one at a time: run `spec` for the part and build what it says, with its tests.
+1. Build the smallest parts first, one at a time. Before each, read `decisions.md` (steps 3-5) along with the spec, and save
+   the spec to `design/specs/<id>.md`. Run `spec` for the part and build what it says, with its tests.
    Then join the parts and run the tests of the larger parts and the whole app (bottom-up, book p. 320).
 2. Put the test id in each test's name (`T2 long URL accepted`) so results trace back to the model.
 3. The spec is the contract. If building shows it is wrong or missing something, stop and propose the model change
-   (the book's change request, p. 321). It goes back through review; don't drift from it in code.
+   (the book's change request, p. 321). It goes back through review; don't drift from it in code. A proposed model change
+   blocks `spec` until it is re-approved: keep building the unaffected parts from their saved specs meanwhile.
 
 ## Hand-off
 
-After each round, first write its content into `decisions.md`. Then tell the engineer in chat, in plain words and briefly;
+After each round, first write its content into `decisions.md` and start `wait`. Then tell the engineer in chat, in plain words and briefly;
 the full detail is in `decisions.md`:
 
 - what you added or changed, by step;
 - what you assumed, and the questions still open;
 - what the guide asked you to bring up that the model can't hold (alternatives you weighed and why you chose, risks);
+- which steps went stale, if you changed anything an approved step covers;
 - which step to review now, at the `serve` URL, and that you will see their decision there without being told.
 
 ## The book

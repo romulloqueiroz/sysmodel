@@ -10,6 +10,7 @@ import json
 import os
 import re
 import sys
+import tempfile
 import threading
 import time
 import webbrowser
@@ -545,11 +546,11 @@ OWNERS = [  # pieces of the model, and the steps whose approval covers each; SKI
     ("`items` an external system sends or receives", (1, 2, 5)),
     ("other `items`", (2, 5)),
     ("`requirements` without `derived_from` (all fields but `specifies`)", (1, 6)),
-    ("`requirements` with `derived_from` (all fields but `specifies`)", (4, 6)),
-    ("`specifies` links to the system", (1,)),
-    ("`specifies` links to functions and items", (2,)),
-    ("`specifies` links to components", (4,)),
-    ("`specifies` links to interfaces", (5,)),
+    ("`requirements` with `derived_from` (all fields)", (4, 6)),
+    ("`specifies` links of requirements without `derived_from` to the system", (1,)),
+    ("`specifies` links of requirements without `derived_from` to functions and items", (2,)),
+    ("`specifies` links of requirements without `derived_from` to components", (4,)),
+    ("`specifies` links of requirements without `derived_from` to interfaces", (5,)),
     ("`functions` (all fields but `runs_in`)", (2, 4)),
     ("`runs_in`", (4,)),
     ("`components`", (3, 4, 5)),
@@ -561,23 +562,67 @@ def pieces(m):
     g = lambda k: m.get(k) or []
     ids = lambda *ks: {x["id"] for k in ks for x in g(k)}
     edge = {i for e in g("external") for i in (e.get("sends") or []) + (e.get("receives") or [])}
-    reqs = [{k: v for k, v in r.items() if k != "specifies"} for r in g("requirements")]
+    plain = [r for r in g("requirements") if not r.get("derived_from")]
     def links(targets):
-        return [[r["id"], ts] for r in g("requirements") if (ts := [t for t in r.get("specifies") or [] if t in targets])]
+        return [[r["id"], ts] for r in plain if (ts := [t for t in r.get("specifies") or [] if t in targets])]
     return [[m.get(k) for k in ("stages", "stakeholders", "sources", "objectives", "scenarios")],
             m.get("system"), g("external"),
             [i for i in g("items") if i["id"] in edge], [i for i in g("items") if i["id"] not in edge],
-            [r for r in reqs if not r.get("derived_from")], [r for r in reqs if r.get("derived_from")],
+            [{k: v for k, v in r.items() if k != "specifies"} for r in plain],
+            [r for r in g("requirements") if r.get("derived_from")],
             links({m["system"]["id"]}), links(ids("functions", "items")), links(ids("components")),
             links(ids("interfaces")),
             [{k: v for k, v in f.items() if k != "runs_in"} for f in g("functions")],
             [[f["id"], f["runs_in"]] for f in g("functions") if f.get("runs_in")],
             g("components"), g("interfaces"), g("tests")]
 
+def digest(x, n=12):
+    return hashlib.sha256(json.dumps(x, sort_keys=True, default=str).encode()).hexdigest()[:n]
+
 def fingerprint(m, step):
     """Short hash of the pieces a step's approval covers (see OWNERS)."""
-    part = [p for p, (_, steps) in zip(pieces(m), OWNERS) if step in steps]
-    return hashlib.sha256(json.dumps(part, sort_keys=True, default=str).encode()).hexdigest()[:12]
+    return digest([p for p, (_, steps) in zip(pieces(m), OWNERS) if step in steps])
+
+PAIRS = {7, 8, 9, 10, 12}   # OWNERS pieces that are [id, ...] pairs (links), keyed by their first id
+
+def elements(m, step):
+    """{id: short hash} of every element in the step's pieces; a link is keyed by the requirement or function that owns it."""
+    acc = defaultdict(list)
+    for i, (p, (_, steps)) in enumerate(zip(pieces(m), OWNERS)):
+        if step in steps:
+            flat = [e for x in p for e in x or []] if i == 0 else [p] if isinstance(p, dict) else p or []
+            for e in flat:
+                acc[e[0] if i in PAIRS else e["id"] if isinstance(e, dict) else "stages"].append(e)
+    return {k: digest(v, 8) for k, v in acc.items()}
+
+def state_path(model):
+    """Per-model scratch file in the temp dir (not the user's repo): the running review app and the AI's hand-off."""
+    return Path(tempfile.gettempdir()) / f"sysmodel-{hashlib.sha256(str(Path(model).resolve()).encode()).hexdigest()[:12]}.json"
+
+def read_state(model):
+    try:
+        d = json.loads(state_path(model).read_text())
+    except (OSError, ValueError):
+        return {}
+    return d if isinstance(d, dict) else {}
+
+def write_state(model, **changes):
+    """Set keys of the state file (a None value removes the key)."""
+    d = {**read_state(model), **changes}
+    d = {k: v for k, v in d.items() if v is not None}
+    try:
+        state_path(model).write_text(json.dumps(d))
+    except OSError:
+        pass
+
+def serve_alive(model):
+    """The recorded `serve` entry if its process still runs, else None."""
+    s = read_state(model).get("serve")
+    try:
+        os.kill(int(s["pid"]), 0)
+        return s
+    except (TypeError, KeyError, ValueError, OSError):
+        return None
 
 def review_path(model):
     return Path(model).with_suffix(".review.yaml")
@@ -592,21 +637,26 @@ def review_state(m, decisions, step):
     out = {}
     for n in range(1, step + 1):
         fp, last = fingerprint(m, n), decisions.get(n)
-        out[n] = {"fingerprint": fp, "last": last, "current": bool(last) and last.get("fingerprint") == fp}
+        was, now = (last or {}).get("elements") or {}, elements(m, n) if last else {}
+        out[n] = {"fingerprint": fp, "last": last, "current": bool(last) and last.get("fingerprint") == fp,
+                  "changed": {"added": sorted(now.keys() - was.keys()) if was else [],
+                              "changed": sorted(k for k in now.keys() & was.keys() if now[k] != was[k]),
+                              "removed": sorted(was.keys() - now.keys())}}
     return out
 
 def read_notes(model):
     f = Path(model).with_name("decisions.md")
     return f.read_text() if f.is_file() else None
 
-def render(m, step=6, decisions=None, live=None, notes=None):
+def render(m, step=6, decisions=None, live=None, notes=None, model=None):
     """Self-contained HTML review page for steps 1..step (pictures drawn in the browser).
-    decisions: from load_reviews. notes: text of decisions.md. live: {"version": ...} when `serve` hands the page out, so it can save decisions."""
+    decisions: from load_reviews. notes: text of decisions.md. model: path of the model file (for the AI's hand-off record). live: {"version": ...} when `serve` hands the page out, so it can save decisions."""
     found = check_model(m, step)
     drawable = not any(f["rule"] == "S01" for f in found)
     data = {"model": m, "step": step, "steps": STEPS, "findings": found, "drawable": drawable,
             "judgment": [{"rule": r, "step": st, "text": t, "page": pg} for r, st, pg, t in JUDGMENT if st <= step],
-            "review": review_state(m, decisions or {}, step) if drawable else {}, "live": live, "notes": notes}
+            "review": review_state(m, decisions or {}, step) if drawable else {}, "live": live, "notes": notes,
+            "progress": progress(m, decisions or {}, model) if drawable else []}
     blob = json.dumps(data, ensure_ascii=False, default=str).replace("</", "<\\/")
     return Path(__file__).with_name("render.html").read_text().replace("/*DATA*/null", blob)
 
@@ -614,20 +664,29 @@ def wait_for_review(model, every=1.0):
     """Block until a person approves or sends back a step in `serve`; returns {step: decision} for what changed."""
     path = review_path(model)
     before = load_reviews(path)
+    try:
+        m = yaml.safe_load(Path(model).read_text())
+        write_state(model, handoff={str(r["step"]): fingerprint(m, r["step"]) for r in progress(m, before) if r["turn"] == "person"})
+    except (OSError, yaml.YAMLError, KeyError, TypeError, AttributeError):
+        pass
     while True:
         time.sleep(every)
         changed = {n: d for n, d in load_reviews(path).items() if d != before.get(n)}
         if changed:
             return changed
+        if not serve_alive(model):
+            return None
 
 STARTED = {  # does the model have anything for this step yet?
     1: lambda m: m.get("requirements"), 2: lambda m: m.get("functions"), 3: lambda m: m.get("components"),
     4: lambda m: any(f.get("runs_in") for f in m.get("functions") or []),
     5: lambda m: m.get("interfaces"), 6: lambda m: m.get("tests")}
 
-def progress(m, decisions):
+def progress(m, decisions, model=None):
     """Whose turn each step is: done (approved, unchanged since, nothing to fix), ai (not started, must-fix problems, or sent back),
-    or person (waiting for a review in `serve`)."""
+    or person (waiting for a review in `serve`). With a model path and a hand-off record (from `wait`), a step the AI changed since
+    the hand-off is still the AI's."""
+    handoff = read_state(model).get("handoff") if model else None
     found = check_model(m)
     if any(f["rule"] == "S01" for f in found):
         return [dict(step=n, name=STEPS[n], turn="ai", why="the file doesn't match schema.json (run check)",
@@ -638,10 +697,10 @@ def progress(m, decisions):
         warnings = sum(f["step"] == n and f["severity"] == "warning" for f in found)
         last = r["last"] or {}
         who = f"{last.get('by')}, {str(last.get('at', '')).replace('T', ' ')}"
-        if last.get("decision") == "approved" and r["current"] and not errors:
-            turn, why = "done", f"approved by {who}"
-        elif not STARTED[n](m):
+        if not STARTED[n](m):
             turn, why = "ai", "not started"
+        elif last.get("decision") == "approved" and r["current"] and not errors:
+            turn, why = "done", f"approved by {who}"
         elif errors:
             turn, why = "ai", f"{errors} must fix"
         elif last.get("decision") == "sent back" and r["current"]:
@@ -652,6 +711,8 @@ def progress(m, decisions):
             turn, why = "person", f"changed since sent back by {who}: review again"
         else:
             turn, why = "person", "ready for review"
+        if turn == "person" and isinstance(handoff, dict) and handoff.get(str(n)) != r["fingerprint"]:
+            turn, why = "ai", "the AI is still working on it"
         rows.append(dict(step=n, name=STEPS[n], turn=turn, why=why, errors=errors, warnings=warnings))
     return rows
 
@@ -837,20 +898,29 @@ def make_server(model, step=6, port=8765):
             return 409, {"error": "The file doesn't match the format, so it can't be reviewed yet.", "reload": True}
         if body.get("fingerprint") != fingerprint(m, n):
             return 409, {"error": "The model changed while you were looking, so nothing was saved.", "reload": True}
+        if decision == "approved" and not STARTED[n](m):
+            return 409, {"error": "This step isn't started yet, so there is nothing to approve."}
         errors = sum(f["step"] == n and f["severity"] == "error" for f in found)
         if decision == "approved" and errors:
             return 409, {"error": f"Fix the {errors} must-fix problems first."}
-        rules = {r for r, st, _, _ in JUDGMENT if st == n}
         decisions = load_reviews(reviews)
+        if decision == "approved":
+            rows = progress(m, decisions, model)
+            early = next((r for r in rows if r["step"] < n and r["turn"] != "done"), None)
+            if early:
+                return 409, {"error": f"Step {early['step']} {early['name']} isn't approved yet. Approve the steps in order."}
+            if rows[n - 1]["why"] == "the AI is still working on it":
+                return 409, {"error": "The AI is still working on this step. Wait until it hands the step over."}
+        rules = {r for r, st, _, _ in JUDGMENT if st == n}
         decisions[n] = {"decision": decision, "by": getpass.getuser(), "at": datetime.now().isoformat(timespec="minutes"),
-                        "fingerprint": fingerprint(m, n), "note": note,
+                        "fingerprint": fingerprint(m, n), "note": note, "elements": elements(m, n),
                         "checked": [r for r in body.get("checked") or [] if r in rules]}
         tmp = reviews.with_suffix(".tmp")
         tmp.write_text("# Review decisions from `sysmodel serve`, latest per step. An approval holds while the\n"
                        "# step's fingerprint matches the model; a change to what the step shows makes it stale.\n"
                        + yaml.safe_dump(dict(sorted(decisions.items())), sort_keys=False, allow_unicode=True))
         os.replace(tmp, reviews)
-        return 200, {"version": version(), "review": review_state(m, decisions, step)}
+        return 200, {"version": version(), "review": review_state(m, decisions, step), "progress": progress(m, decisions, model)}
 
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *args):
@@ -890,7 +960,7 @@ def make_server(model, step=6, port=8765):
             except (OSError, yaml.YAMLError) as e:
                 page = UNREADABLE.format(name=html.escape(model.name), error=html.escape(str(e)), version=json.dumps(v))
                 return self.reply(200, page, "text/html")
-            page = render(m, step, load_reviews(reviews), {"version": v}, read_notes(model))
+            page = render(m, step, load_reviews(reviews), {"version": v}, read_notes(model), model)
             for url, name in VENDOR.items():
                 page = page.replace(url, "/vendor/" + name)
             self.reply(200, page, "text/html")
@@ -947,16 +1017,23 @@ def main(argv=None):
         srv = make_server(args.model, args.step, args.port)
         url = f"http://127.0.0.1:{srv.server_address[1]}/"
         print(f"Reviewing {args.model} at {url}\nDecisions go to {review_path(args.model)}. Press Ctrl+C to stop.", flush=True)  # flush: seen at once when run in the background
+        write_state(args.model, serve={"pid": os.getpid(), "url": url})
         webbrowser.open(url)
         try:
             srv.serve_forever()
         except KeyboardInterrupt:
             pass
+        finally:
+            write_state(args.model, serve=None)
         return 0
     if args.cmd == "wait":
         if not Path(args.model).is_file():
             sys.exit(f"cannot find {args.model}")
-        for n, d in sorted(wait_for_review(args.model).items()):
+        done = wait_for_review(args.model)
+        if done is None:
+            print("The review app stopped. Start `serve` again, then `wait`.", file=sys.stderr)
+            return 2
+        for n, d in sorted(done.items()):
             print(f"Step {n} {STEPS[n]}: {d.get('decision')} by {d.get('by')}, {str(d.get('at', '')).replace('T', ' ')}")
             if d.get("note"):
                 print(f"Note: {d['note']}")
@@ -967,7 +1044,9 @@ def main(argv=None):
     except (OSError, yaml.YAMLError) as e:
         sys.exit(f"cannot load {args.model}: {e}")
     if args.cmd == "status":
-        rows = progress(m, load_reviews(review_path(args.model)))
+        rows = progress(m, load_reviews(review_path(args.model)), args.model)
+        app = serve_alive(args.model)
+        print(f"Review app: {app['url']}" if app else "Review app: not running; start serve")
         for r in rows:
             extra = f" ({r['warnings']} worth a look)" if r["warnings"] and r["turn"] != "done" else ""
             print(f"{r['step']} {r['name']:<11} {r['turn'].upper():<7} {r['why']}{extra}")
@@ -991,7 +1070,7 @@ def main(argv=None):
         return 0
     if args.cmd == "render":
         out = Path(args.out or Path(args.model).with_suffix(".html"))
-        out.write_text(render(m, args.step, load_reviews(review_path(args.model)), notes=read_notes(args.model)))
+        out.write_text(render(m, args.step, load_reviews(review_path(args.model)), notes=read_notes(args.model), model=args.model))
         print(f"wrote {out}")
         return 0
     found = check_model(m, args.step)

@@ -68,6 +68,8 @@ python3 sysmodel.py spec   design/system.yaml C11   # the build spec for one par
 
 The review app runs locally and works offline. Decisions are saved next to the model in `system.review.yaml`, so they live in your repo and show up in your diffs. The AI also keeps your answers in `answers.md` and its reasoning in `decisions.md`, so a later session picks up where the last left off.
 
+The review app and `wait` keep a small state file in the system temp folder; nothing extra is written to your repo.
+
 ## Built on a classic
 
 The method comes from Dennis M. Buede and William D. Miller, *The Engineering Design of Systems: Models and Methods* (4th ed., Wiley), tailored for software apps. Rules and guides cite the book's pages, so if you own it you can look up why each rule exists. The book isn't required to use sysmodel, and none of its text is reproduced here.

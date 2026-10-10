@@ -12,7 +12,8 @@ Decides every connection an item crosses, between two parts or between a part (o
 
 ## Start from
 - Step 1: `external` (`sends`/`receives`), `items`, `external-interface` requirements, performance requirements and their `threshold`s, `objectives`.
-- Step 2: each leaf job's `inputs` and `outputs`. Step 4: `runs_in`. Together they fix every flow: item X leaves part A and enters part B or an outside system. Step 2 may have deferred error-handling jobs (pp. 202-205); pick up that list from step 2's section of `decisions.md`.
+- Read the `### For step 5` notes in `decisions.md` (work earlier steps deferred to this one).
+- Step 2: each leaf job's `inputs` and `outputs`. Step 4: `runs_in`. Together they fix every flow: item X leaves part A and enters part B or an outside system. Step 2 may have deferred error-handling jobs (pp. 202-205); they are under `### For step 5` or `### For step 4` in step 2's section of `decisions.md`.
 - Run `sysmodel check --step 5` before writing anything. Each R30(b) finding is one flow, `producer -> consumer`, with the item named. Group the findings by pair of ends: each pair is a candidate interface.
 
 ## Do
@@ -21,7 +22,7 @@ Decides every connection an item crosses, between two parts or between a part (o
    - Find the requirements that already bear on each connection: `external-interface` requirements and those specifying the carried items. Interface requirements are derived from system-level ones (p. 266).
    - Two things to cover (pp. 266, 279): performance (throughput, response time) and fidelity (the item arrives unchanged, every item sent is delivered and none is invented, delivery takes a reasonable time, faults are detected early and recovered from).
    - Objectives to compare candidates (A115.1.4): the book's example uses availability, fidelity, running cost and build cost (p. 281). Reuse `objectives` from step 1.
-   - A gap means a new derived requirement (A115.1.5): `derived_from` the parent, `threshold` with units, io or system-wide. It changes what steps 4 and 6 cover (R25 will want a test), so propose it and ask first. **Ask:** How fast must X cross (response time), and how many per second at the busiest time? Never write TBD (R24).
+   - A gap means a new derived requirement (A115.1.5): `derived_from` the parent, `threshold` with units, io or system-wide. If you chose a number yourself, also set `source` to the proposal source ("Proposed by the AI, to confirm in review"). It changes what steps 4 and 6 cover (R25 will want a test), so propose it and ask first. **Ask:** How fast must X cross (response time), and how many per second at the busiest time? Never write TBD (R24).
 2. **Choose a high-level architecture per connection (A115.2, pp. 280-281).**
    - If the other end fixes the interface (a browser, a third-party API) or a standard fits (HTTP, SQL), pick it and stop: the book skips the rest of the design then (p. 281). Standards bring swappable parts, more outside systems you can work with, lower cost and risk, longer life (p. 272). Most app connections end here. Say so in `decisions.md`.
    - Otherwise list 2 or 3 candidates (A115.2.1) from the three generic styles (pp. 267-271):

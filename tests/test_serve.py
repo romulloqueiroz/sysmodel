@@ -1,6 +1,7 @@
 import copy
 import http.client
 import json
+import os
 import sys
 import threading
 from pathlib import Path
@@ -36,6 +37,8 @@ def test_fingerprint_covers_only_what_the_step_shows():
     assert changed_steps(lambda m: E(m, "requirements", "Q3")["specifies"].append("C1")) == {4}
     assert changed_steps(lambda m: m["requirements"].append(
         {"id": "Q9", "text": "x", "derived_from": ["Q3"], "specifies": ["C2"]})) == {4, 6}       # derived while matching
+    assert changed_steps(lambda m: m["requirements"].append(
+        {"id": "Q9", "text": "x", "derived_from": ["Q1"], "specifies": ["I5", "F11"]})) == {4, 6}  # not step 2's links
 
 
 def test_review_state_goes_stale_when_the_step_changes():
@@ -109,6 +112,7 @@ def test_serve_page_uses_offline_copies_and_knows_it_is_live(served):
 def test_serve_saves_decisions_next_to_the_model(served):
     model, call = served
     v0 = json.loads(call("GET", "/api/version")[2])["version"]
+    assert post(call, 1, "approved", model)[0] == 200
     status, out = post(call, 2, "approved", model, checked=["R12", "R99"])
     assert status == 200 and out["review"]["2"]["current"] and out["version"] != v0
     saved = sysmodel.load_reviews(sysmodel.review_path(model))
@@ -228,3 +232,108 @@ def test_serve_notes_show_and_version_follows_decisions_md(served):
     (model.parent / "decisions.md").write_text("## Step 1 Problem\nhello\n")
     assert json.loads(call("GET", "/api/version")[2])["version"] != v0
     assert page_data(call("GET", "/")[2].decode())["notes"].startswith("## Step 1")
+
+
+@pytest.fixture
+def tmp_state(tmp_path, monkeypatch):
+    monkeypatch.setattr(sysmodel.tempfile, "tempdir", str(tmp_path / "tmp"))
+    (tmp_path / "tmp").mkdir()
+    model = tmp_path / "app.yaml"
+    model.write_text(yaml.safe_dump(VALID))
+    return model
+
+
+def test_state_file_is_per_model_in_the_temp_dir_and_tolerates_junk(tmp_state, tmp_path):
+    f = sysmodel.state_path(tmp_state)
+    assert f.parent == tmp_path / "tmp" and f.name.startswith("sysmodel-") and f != sysmodel.state_path(tmp_path / "other.yaml")
+    assert sysmodel.read_state(tmp_state) == {}
+    f.write_text("{not json")
+    assert sysmodel.read_state(tmp_state) == {}
+    sysmodel.write_state(tmp_state, serve={"pid": 1, "url": "u"}, handoff={"1": "x"})
+    sysmodel.write_state(tmp_state, serve=None)
+    assert sysmodel.read_state(tmp_state) == {"handoff": {"1": "x"}}
+
+
+def test_handoff_keeps_a_step_with_the_ai_until_it_is_handed_over(tmp_state):
+    m = copy.deepcopy(VALID)
+    turns = lambda: {r["step"]: (r["turn"], r["why"]) for r in sysmodel.progress(m, {}, tmp_state)}
+    assert turns()[1] == ("person", "ready for review")                      # no hand-off record: as before
+    sysmodel.write_state(tmp_state, handoff={"1": sysmodel.fingerprint(m, 1)})
+    assert turns()[1] == ("person", "ready for review") and turns()[2] == ("ai", "the AI is still working on it")
+    E(m, "requirements", "Q1").update(text="x")
+    assert turns()[1] == ("ai", "the AI is still working on it")
+
+
+def test_progress_never_calls_an_unstarted_step_done():
+    m = copy.deepcopy(VALID)
+    m.pop("tests")
+    d = {6: {"decision": "approved", "fingerprint": sysmodel.fingerprint(m, 6)}}
+    assert sysmodel.progress(m, d)[5]["why"] == "not started"
+
+
+def test_wait_records_handoff_and_stops_when_serve_is_gone(tmp_state, capsys):
+    assert sysmodel.main(["wait", str(tmp_state)]) == 2
+    assert "The review app stopped. Start `serve` again, then `wait`." in capsys.readouterr().err
+    h = sysmodel.read_state(tmp_state)["handoff"]
+    assert h and h["1"] == sysmodel.fingerprint(VALID, 1)
+    sysmodel.write_state(tmp_state, serve={"pid": 2 ** 22 + 12345, "url": "u"})   # dead pid
+    assert sysmodel.main(["wait", str(tmp_state)]) == 2
+
+
+def test_status_names_the_review_app(tmp_state, capsys):
+    sysmodel.main(["status", str(tmp_state)])
+    assert "Review app: not running; start serve" in capsys.readouterr().out
+    sysmodel.write_state(tmp_state, serve={"pid": os.getpid(), "url": "http://127.0.0.1:8765/"})
+    sysmodel.main(["status", str(tmp_state)])
+    assert "Review app: http://127.0.0.1:8765/" in capsys.readouterr().out
+
+
+def test_serve_refuses_approvals_out_of_order_or_early(served, tmp_state):
+    model, call = served
+    status, out = post(call, 3, "approved", model)
+    assert status == 409 and "Step 1" in out["error"]
+    m = yaml.safe_load(model.read_text())
+    m.pop("tests")
+    model.write_text(yaml.safe_dump(m))
+    assert post(call, 1, "approved", model)[0] == 200 and post(call, 2, "approved", model)[0] == 200
+    for n in (3, 4, 5):
+        assert post(call, n, "approved", model)[0] == 200
+    status, out = post(call, 6, "approved", model)
+    assert status == 409 and "isn't started" in out["error"]
+    assert post(call, 6, "sent back", model, note="no tests")[0] == 200       # send back stays allowed
+
+
+def test_serve_refuses_approval_while_the_ai_is_working(served):
+    model, call = served
+    sysmodel.write_state(model, handoff={})
+    try:
+        status, out = post(call, 1, "approved", model)
+        assert status == 409 and "still working" in out["error"]
+        assert post(call, 1, "sent back", model, note="x")[0] == 200
+    finally:
+        sysmodel.state_path(model).unlink()
+
+
+def test_decision_saves_elements_and_page_says_what_changed(served):
+    model, call = served
+    assert post(call, 1, "approved", model)[0] == 200
+    saved = sysmodel.load_reviews(sysmodel.review_path(model))[1]["elements"]
+    assert "Q1" in saved and "SH1" in saved
+    none = {"added": [], "changed": [], "removed": []}
+    assert page_data(call("GET", "/")[2].decode())["review"]["1"]["changed"] == none
+    m = yaml.safe_load(model.read_text())
+    E(m, "requirements", "Q1").update(text="changed")
+    m["requirements"] = [r for r in m["requirements"] if r["id"] != "Q2"]
+    m["requirements"].append({"id": "Q8", "text": "new"})
+    model.write_text(yaml.safe_dump(m))
+    ch = sysmodel.review_state(m, sysmodel.load_reviews(sysmodel.review_path(model)), 6)[1]["changed"]
+    assert ch == {"added": ["Q8"], "changed": ["Q1"], "removed": ["Q2"]}
+    assert sysmodel.review_state(m, {1: {"fingerprint": "old"}}, 6)[1]["changed"] == none   # old review file: no elements
+
+
+def test_page_data_carries_progress(tmp_path):
+    src = tmp_path / "app.yaml"
+    src.write_text(yaml.safe_dump(VALID))
+    assert sysmodel.main(["render", str(src)]) == 0
+    rows = page_data((tmp_path / "app.html").read_text())["progress"]
+    assert [r["step"] for r in rows] == [1, 2, 3, 4, 5, 6] and {"name", "turn", "why", "errors", "warnings"} <= rows[0].keys()

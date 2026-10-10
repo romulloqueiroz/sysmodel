@@ -77,6 +77,13 @@ h1, h2, h3, h4, p { margin: 0; }
 .step small { color: var(--muted); display: block; font-size: .78rem; line-height: 1.3; }
 .count { font-size: .75rem; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 999px; display: grid; place-items: center; background: var(--warn-bg); border: 1px solid var(--warn); }
 .count.ok { background: var(--ok-bg); border-color: transparent; color: var(--ok); }
+.step .turn { display: block; font-size: .75rem; color: var(--muted); }
+.step .turn.you { color: var(--accent); font-weight: 700; }
+.waiting { border: 1px solid var(--warn); background: var(--warn-bg); border-radius: 12px; padding: 12px 14px; display: grid; gap: 8px; }
+.waiting h4 { margin: 0; }
+.waiting h5.from { margin: 4px 0 0; font-size: .95rem; }
+.alldone { border: 1px solid var(--ok); background: var(--ok-bg); border-radius: 12px; padding: 10px 14px; font-weight: 700; }
+.changed ul { margin: 2px 0 0; padding-left: 1.3em; display: grid; gap: 2px; }
 .count.later { background: none; border: 0; color: var(--muted); }
 .step .n.ok { background: var(--ok); border-color: var(--ok); color: var(--panel); font-family: var(--body); }
 .step .n.back { background: var(--warn-bg); border-color: var(--warn); font-family: var(--body); }
@@ -318,6 +325,20 @@ dl.facts dd { margin: 0; min-width: 0; display: flex; flex-wrap: wrap; gap: 4px;
   for (const f of D.findings) (probsOf[f.element] ??= []).push(f);
   const probs = id => (probsOf[id] || []).filter(f => f.step <= S.step);   // later steps' rules wait for their step
   const badge = id => probs(id).filter(f => f.severity !== "advice").length;
+  const prog = n => (D.progress || []).find(r => r.step === n);
+  const started = n => { const p = prog(n); return !p || p.why !== "not started"; };
+  const turnWord = n => { const p = prog(n), before = (D.progress || []).find(r => r.step < n && r.turn !== "done");
+    return !p ? "" : p.why === "not started" ? "Not started" : p.turn === "done" ? "Approved"
+      : p.turn === "person" ? (before ? `After step ${before.step}` : "Your turn") : "AI working"; };
+  const firstOpen = () => (D.progress || []).find(r => r.turn !== "done")?.step || 1;
+  const approveBlock = n => {   // why Approve is off, in plain words; "" when allowed
+    const p = prog(n); if (!p) return "";
+    if (p.turn === "done") return `Step ${n} is already approved.`;
+    if (p.why === "not started") return "Nothing here yet.";
+    if (p.turn === "ai") return "The AI is still working on this step.";
+    const before = (D.progress || []).find(r => r.step < n && r.turn !== "done");
+    return before ? `Step ${before.step} must be approved first.` : "";
+  };
   const stepCount = s => D.findings.filter(f => f.step === s && f.severity !== "advice").length;
 
   // ---------------- measuring ----------------
@@ -446,7 +467,7 @@ dl.facts dd { margin: 0; min-width: 0; display: flex; flex-wrap: wrap; gap: 4px;
   const focusOf = v => S.focus[v] ?? VIEWS[v].start?.();
   function readHash() {
     const p = new URLSearchParams(location.hash.slice(1));
-    const s = Math.min(Math.max(+p.get("s") || 1, 1), D.step);
+    const s = Math.min(Math.max(+p.get("s") || firstOpen(), 1), D.step);
     const views = viewsOf(s);
     S.step = s;
     S.view = views.includes(p.get("v")) ? p.get("v") : views[0] || null;
@@ -572,11 +593,11 @@ dl.facts dd { margin: 0; min-width: 0; display: flex; flex-wrap: wrap; gap: 4px;
       const out = await res.json();
       if (out.reload) { dr.msg = out.error + " Here is the latest version."; saveDrafts(); return reload(); }
       if (!res.ok) return say(out.error);
-      D.review = out.review; D.live.version = out.version;
+      D.review = out.review; D.live.version = out.version; if (out.progress) D.progress = out.progress;
       drafts[n] = { note: "", checked: dr.checked }; saveDrafts();
       renderSteps(); renderSide();
       $("side-in").querySelector(decision === "approved" ? ".review .primary" : ".review .secondary")?.focus();
-      say(decision === "approved" ? "Saved: approved." : "Saved: sent back.");
+      say("Saved. The AI picks this up by itself; if nothing happens in a couple of minutes, tell it in chat.");
     } catch (e) { say("Can't reach sysmodel serve. Is it still running?"); }
     finally { saving = false; }
   }
@@ -585,17 +606,18 @@ dl.facts dd { margin: 0; min-width: 0; display: flex; flex-wrap: wrap; gap: 4px;
   function renderTop() {
     $("sysname").textContent = D.drawable ? m.system.name : "Model";
     $("purpose").textContent = D.drawable ? (m.system.purpose || "") : "";
-    const fix = D.findings.filter(f => f.severity === "error").length, look = D.findings.filter(f => f.severity === "warning").length;
+    $("purpose").title = $("purpose").textContent;
+    const mine = D.findings.filter(f => f.step <= S.step && started(f.step)), fix = mine.filter(f => f.severity === "error").length, look = mine.filter(f => f.severity === "warning").length;
     $("status").replaceChildren(fix + look ? h("span", { class: "pill warn" }, `${fix} to fix · ${look} to look at`) : h("span", { class: "pill ok" }, "Checks pass"));
   }
   function renderSteps() {
     $("stepnow").textContent = `Step ${S.step} · ${D.steps[S.step]}`;
     $("steps").replaceChildren(...[1, 2, 3, 4, 5, 6].map(n => {
-      const later = n > D.step, c = later ? 0 : stepCount(n), [mark, word] = later ? [""] : reviewOf(n);
+      const later = n > D.step, c = later || !started(n) ? 0 : stepCount(n), [mark, word] = later ? [""] : reviewOf(n);
       return h("button", { class: "step", disabled: later, "aria-current": n === S.step ? "step" : null, onclick: () => goStep(n),
           title: later ? `Not checked yet. Run sysmodel with --step ${n}.` : null },
         h("span", { class: `n ${mark}`, "aria-hidden": "true" }, mark === "ok" ? "✓" : mark === "back" ? "↩" : n),
-        h("span", {}, h("b", {}, D.steps[n]), h("small", {}, STEPS[n].q), mark ? h("span", { class: "vh" }, ` (${word})`) : null),
+        h("span", {}, h("b", {}, D.steps[n]), turnWord(n) ? h("span", { class: `turn ${prog(n).turn === "person" && started(n) ? "you" : ""}` }, turnWord(n)) : null, h("small", {}, STEPS[n].q), mark ? h("span", { class: "vh" }, ` (${word})`) : null),
         later ? h("span", { class: "count later" }, "later") : c ? h("span", { class: "count", title: `${c} problems` }, c) : null);
     }));
   }
@@ -930,6 +952,8 @@ dl.facts dd { margin: 0; min-width: 0; display: flex; flex-wrap: wrap; gap: 4px;
   function summary() {
     const st = STEPS[S.step], fs = D.findings.filter(f => f.step === S.step);
     return [
+      D.progress?.length === 6 && D.progress.every(r => r.turn === "done") ? h("p", { class: "alldone" }, "The design is approved. Ask the AI to build it.") : null,
+      waitingBox(),
       h("div", {}, h("div", { class: "kindline" }, `Step ${S.step} of 6 · ${D.steps[S.step]}`), h("h2", {}, st.q)),
       h("p", { class: "guide" }, st.check),
       h("div", {}, h("h4", {}, fs.length ? `Things to look at (${fs.length})` : "Things to look at"),
@@ -938,13 +962,29 @@ dl.facts dd { margin: 0; min-width: 0; display: flex; flex-wrap: wrap; gap: 4px;
       reviewCard(),
     ];
   }
+  // decisions.md: one "## Step N Name" section per step; its "### Waiting for your yes" part is split off here.
+  const WAIT = /^### Waiting for your yes[^\n]*\n?[\s\S]*?(?=^###? |(?![\s\S]))/m;
+  const noteSections = () => (D.notes || "").split(/^(?=## )/m).filter(t => /^## Step \d/.test(t)).map(t => {
+    const head = t.match(/^## Step (\d+)\s*(.*)/), w = WAIT.exec(t);
+    return { n: +head[1], title: head[2].trim(), wait: w ? w[0].replace(/^.*\n?/, "") : "", rest: (w ? t.replace(WAIT, "") : t).replace(/^.*\n?/, "") };
+  });
+  function waitingBox() {
+    const ws = noteSections().filter(x => x.wait.trim());
+    return ws.length ? h("section", { class: "waiting notes", "aria-label": "Waiting for your yes" },
+      h("h4", {}, "Waiting for your yes"),
+      h("p", { class: "small" }, "Approve doesn't answer these. Say yes or no to each in the note below."),
+      ws.map(x => [h("h5", { class: "from" }, `Step ${x.n}${x.title ? " · " + x.title : ""}`), mdBlocks(x.wait)])) : null;
+  }
   function notesSection() {
-    const mine = (D.notes || "").split(/^(?=## )/m).find(t => new RegExp(`^## Step ${S.step}\\b`).test(t));
-    return mine ? h("div", { class: "notes" }, h("h4", {}, "The AI's notes"), mdBlocks(mine.replace(/^.*\n?/, ""))) : null;
+    const mine = noteSections().find(x => x.n === S.step);
+    return mine && mine.rest.trim() ? h("div", { class: "notes" }, h("h4", {}, "The AI's notes"), mdBlocks(mine.rest)) : null;
+  }
+  function mdIds(t) {   // plain text: known model ids become links
+    return t.split(/([\w-]+(?:\.[\w-]+)*)/).map(p => p && Object.hasOwn(byId, p) ? link(p) : p);
   }
   function mdInline(t) {
     return t.split(/(\*\*.+?\*\*|`[^`]+`)/).map(p => p.startsWith("**") && p.length > 4 ? h("b", {}, p.slice(2, -2))
-      : p.startsWith("`") && p.length > 2 ? h("code", {}, p.slice(1, -1)) : p);
+      : p.startsWith("`") && p.length > 2 ? (Object.hasOwn(byId, p.slice(1, -1)) ? link(p.slice(1, -1)) : h("code", {}, p.slice(1, -1))) : mdIds(p));
   }
   function mdBlocks(text) {
     const out = [], L = text.split("\n"), cells = l => l.trim().replace(/^\||\|$/g, "").split("|").map(c => c.trim());
@@ -975,6 +1015,8 @@ dl.facts dd { margin: 0; min-width: 0; display: flex; flex-wrap: wrap; gap: 4px;
     const msg = h("p", { class: "small", id: "review-msg", role: "status" }, dr.msg || "");
     if (dr.msg) { delete dr.msg; saveDrafts(); }
     const tick = j => e => { dr.checked = e.target.checked ? [...dr.checked, j.rule] : dr.checked.filter(r => r !== j.rule); saveDrafts(); };
+    const ch = D.review[n]?.changed, chIds = ch ? ["added", "changed", "removed"].filter(k => ch[k]?.length) : [];
+    const guard = approveBlock(n);
     let note = null;
     if (D.live) {
       note = h("textarea", { id: "review-note", rows: 3, "aria-label": "Note",
@@ -985,15 +1027,19 @@ dl.facts dd { margin: 0; min-width: 0; display: flex; flex-wrap: wrap; gap: 4px;
       h("h4", {}, "Your review"),
       h("p", { class: "revstate" }, h("span", { class: `chip ${{ ok: "ok", stale: "warning", back: "error" }[mark] || "none"}` }, word), sentence),
       last?.note ? h("p", { class: "revnote" }, last.note) : null,
+      chIds.length ? h("div", { class: "changed" }, h("p", { class: "small muted" }, "Changed since your last review:"),
+        chIds.map(k => h("div", {}, h("p", { class: "small" }, k[0].toUpperCase() + k.slice(1) + ":"),
+          h("ul", {}, ch[k].map(id => h("li", {}, k === "removed" ? h("span", {}, id) : link(id))))))) : null,
       js.length ? h("div", {}, h("p", { class: "small muted", style: "margin-bottom:8px" }, "Only a person can judge these:"),
         h("ul", { class: "checks" }, js.map(j => h("li", {}, h("label", {},
           h("input", { type: "checkbox", checked: dr.checked.includes(j.rule), onchange: tick(j) }),
           h("span", {}, j.text, h("span", { class: "muted small" }, ` · ${j.rule}, book p.${j.page}`))))))) : null,
       note,
       D.live ? h("div", { class: "btnrow" },
-        h("button", { class: "primary", disabled: errors > 0, onclick: () => decide(n, "approved") }, `Approve step ${n}`),
+        h("button", { class: "primary", disabled: errors > 0 || !!guard, onclick: () => decide(n, "approved") }, `Approve step ${n}`),
         h("button", { class: "secondary", onclick: () => decide(n, "sent back") }, "Send back")) : null,
-      D.live && errors ? h("p", { class: "small muted" }, `You can approve once the ${errors} must-fix problems above are fixed.`) : null,
+      D.live && guard ? h("p", { class: "small muted" }, guard) : null,
+      D.live && !guard && errors ? h("p", { class: "small muted" }, `You can approve once the ${errors} must-fix problems above are fixed.`) : null,
       D.live ? msg : h("p", { class: "small muted" }, "To approve or send back, open this model with ", h("code", {}, "sysmodel serve"), "."));
   }
   function facts(id) {

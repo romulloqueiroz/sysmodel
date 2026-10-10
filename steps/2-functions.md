@@ -10,10 +10,12 @@ Open the black box from step 1: one tree of jobs (functions, p. 178), the items 
 - `items[].description` (data model, p. 181): what the item holds: its fields, format and limits, with one example. The build spec prints it. Write one for every item that carries data.
 - `requirements[].specifies` (traced to, p. 59): on io requirements, the functions and items they are about.
 - Do not set `runs_in`; that is step 4.
+- If requirements exist for the build stage, write jobs for them.
 - The model cannot hold these, so write them to `decisions.md` under this step's heading: simple functionalities, alternative decompositions, relations between items, operating modes and states, deferred error-handling functions. It has no control or trigger link either: list those items under `inputs` and name them so the role shows (`Redirect request`, `Rate-limit setting`; p. 53).
 
 ## Start from
 - Read from step 1: `scenarios` (steps), `external` (`sends`/`receives`), the boundary `items`, and io `requirements` (input, output, external-interface, functional).
+- Read the `### For step 2` notes in `decisions.md` (work earlier steps deferred to this one).
 - Functional requirements are the book's first-level functions (pp. 141, 317). Start the top split from them. Changing the first level means changing them too, which is a step 1 edit: say so.
 
 ## Do
@@ -25,7 +27,7 @@ Open the black box from step 1: one tree of jobs (functions, p. 178), the items 
    - Prefer pieces that could each live in one major part (service, database, UI; pp. 182, 202), since step 4 gives every leaf to exactly one part (p. 249).
    - Go two to four levels deep (p. 202). Split a function only where more detail helps (p. 182). Keep housekeeping (logging, backup) apart from the main jobs at lower levels (p. 185).
    - Wire each leaf: boundary items go to the leaf that takes or gives them; add internal items for what leaves pass to each other (p. 181). Do not trivialize how siblings interact: build the flows from many simple functionalities, with the feedback they need (p. 201).
-   - Propose the first-level split; the engineer confirms it. **Ask:** Is this the right way to cut the jobs (list them)? What is missing?
+   - Propose the first-level split (propose it; the engineer confirms in review).
 3. **Evaluate the draft (A1122, pp. 192-193, 201).**
    - Walk each scenario chain through the tree (p. 193): start at its first external input, follow the item into the leaf that takes it, pick the output that leads on, and repeat until the scenario's external output. A break is a shortfall (missing function or flow).
    - Look for shortfalls (no function for some input; an output nobody produces; no feedback; pp. 192-193) and overlaps (two functions doing one job; p. 193).
@@ -34,10 +36,10 @@ Open the black box from step 1: one tree of jobs (functions, p. 178), the items 
    - Go through Sidebar 7.2 (p. 201); see Good vs bad. Try one alternative split and keep the better (pp. 200-201); list the alternative in `decisions.md`.
 4. **Data model (A1123, pp. 181, 202).** The items are the data model. Review the item list for missing or redundant items (p. 200). Name items with nouns (p. 201). Every item comes from an external or a leaf and goes to an external or a leaf. The model keeps no relations, but sketching them often exposes design issues the function view hid (p. 202): put what you find in `decisions.md`. Put each item's fields, format and limits in its `description`. **Ask:** when a business rule appears: can one long URL have several short codes? Do codes expire? Business rules a job follows (how codes are made, uniqueness, expiry, what repeats do) are decisions about behaviour: write each as an io requirement, so it reaches the spec and gets a test.
 5. **Complete the models (A1124, pp. 178, 181, 201-205).**
-   - `done_when` on every leaf: the observable result that ends it (exit criterion, p. 178). Name each way it can end (`Short link returned; or error response returned`). A time or size limit belongs in an io requirement (Table 6.2, p. 140). Propose each one; the engineer confirms.
+   - `done_when` on every leaf: the observable result that ends it (exit criterion, p. 178). Name each way it can end (`Short link returned; or error response returned`). A time or size limit belongs in an io requirement (Table 6.2, p. 140). Propose each one (propose it; the engineer confirms in review).
    - External match (R10): every item an external `sends` is an input of some leaf; every item it `receives` is an output of some leaf. Fix the function wiring first; change `external` only if step 1 was wrong, and say so. The converse (R10): every input of a leaf is given by another leaf or sent by an external, and every output of a leaf is taken by another leaf or received by an external. Settings and secrets a part needs (an API token, a base URL) are items sent by whoever owns them: the outside system that issues them (the chat service issues the bot token) or the person who runs the app (an operator). Never by a host or deploy tool: that is a step 3 choice.
-   - Error handling (pp. 202-205): add input error trapping now (check type and range, tell the user, ask again). Error detection, damage confinement, recovery and fault reporting depend on the parts (p. 202): add what you can, list what you deferred in `decisions.md`.
-   - Review (pp. 181, 201): the book has other engineers and stakeholders critique the draft for missing functions and other splits. Hand the engineer the tree, the scenario chains and the alternative split. **Ask:** Who else should look at this tree?
+   - Error handling (pp. 202-205): add input error trapping now (check type and range, tell the user, ask again). Error detection, damage confinement, recovery and fault reporting depend on the parts (p. 202): add what you can, list what you deferred in `decisions.md` under `### For step 4` (or the step that will do it).
+   - Review (pp. 181, 201): the book has other engineers and stakeholders critique the draft for missing functions and other splits. Hand the engineer the tree, the scenario chains and the alternative split.
 6. **Trace io requirements (A1125, pp. 182, 205-207).** Set `specifies` on each leaf requirement:
    - input or output: the item and the leaf that receives or produces it (pp. 59, 205). Every item you list must be one that a listed leaf takes or gives (R05). The book also traces to every ancestor of that leaf; the tree already implies them, so do not list them.
    - external-interface: the items the interface carries and the leaf that receives or sends them (p. 205).
