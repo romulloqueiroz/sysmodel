@@ -35,11 +35,11 @@ Each step answers one plain question, the way systems engineers have done for de
 
 ## Quick start
 
-You need Python 3 with `pyyaml` and `jsonschema`, and [Claude Code](https://claude.com/claude-code).
+You need [Claude Code](https://claude.com/claude-code) and Python 3.9 or newer, which most Macs and Linux machines already have. There's nothing else to install: the few libraries sysmodel uses come bundled.
 
 ```sh
 git clone https://github.com/romulloqueiroz/sysmodel.git
-pip install pyyaml jsonschema
+mkdir -p ~/.claude/skills
 ln -s "$PWD/sysmodel" ~/.claude/skills/sysmodel
 ```
 
@@ -71,4 +71,4 @@ The method comes from Dennis M. Buede and William D. Miller, *The Engineering De
 
 ## License
 
-MIT. The bundled drawing libraries and fonts keep their own licenses; see [`vendor/`](vendor/).
+MIT. The bundled libraries (PyYAML, rough.js, elkjs) and fonts keep their own licenses; see [`vendor/`](vendor/).

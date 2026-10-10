@@ -19,8 +19,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from urllib.parse import urlparse
 
-import yaml
-from jsonschema import Draft202012Validator
+sys.path.insert(0, str(Path(__file__).resolve().with_name("vendor")))  # bundled PyYAML: nothing to install
+import yaml  # noqa: E402
 
 KINDS = {"stakeholders": "stakeholder", "sources": "source", "objectives": "objective",
          "scenarios": "scenario", "external": "external", "items": "item",
@@ -391,13 +391,49 @@ def label(c, i):
     name = k[1].get("name") or k[1].get("title") or k[1].get("text") or ""
     return f'{i} "{name[:50]}"' if name else i
 
+JSON_TYPES = {"object": lambda x: isinstance(x, dict), "array": lambda x: isinstance(x, list),
+              "string": lambda x: isinstance(x, str),
+              "number": lambda x: isinstance(x, (int, float)) and not isinstance(x, bool)}
+
+def schema_errors(x, s, defs, path=()):
+    """(path, message) for each way x breaks schema s. Only the JSON Schema keywords schema.json uses."""
+    if "$ref" in s:  # the referenced schema, then this one's own keywords (minItems next to a $ref)
+        yield from schema_errors(x, defs[s["$ref"].rsplit("/", 1)[1]], defs, path)
+    if "type" in s and not JSON_TYPES[s["type"]](x):
+        yield path, f"{x!r} is not of type {s['type']!r}"
+        return
+    if "enum" in s and x not in s["enum"]:
+        yield path, f"{x!r} is not one of {s['enum']}"
+    if "pattern" in s and not re.search(s["pattern"], x):
+        yield path, f"{x!r} does not match {s['pattern']!r}"
+    if "minimum" in s and x < s["minimum"]:
+        yield path, f"{x!r} is less than the minimum of {s['minimum']}"
+    if "maximum" in s and x > s["maximum"]:
+        yield path, f"{x!r} is greater than the maximum of {s['maximum']}"
+    if isinstance(x, list):
+        if len(x) < s.get("minItems", 0):
+            yield path, f"{x!r} should have at least {s['minItems']} items"
+        if len(x) > s.get("maxItems", len(x)):
+            yield path, f"{x!r} should have at most {s['maxItems']} items"
+        for i, v in enumerate(x):
+            yield from schema_errors(v, s.get("items", {}), defs, path + (i,))
+    if isinstance(x, dict):
+        props = s.get("properties", {})
+        yield from ((path, f"{k!r} is a required property") for k in s.get("required", []) if k not in x)
+        extra = [k for k in x if k not in props]
+        if extra and s.get("additionalProperties") is False:
+            yield path, f"Additional properties are not allowed ({', '.join(map(repr, extra))} unexpected)"
+        for k, v in x.items():
+            if k in props:
+                yield from schema_errors(v, props[k], defs, path + (k,))
+
 def check_model(m, step=6):
     """Findings for the rules of steps 1..step."""
     schema = json.loads(Path(__file__).with_name("schema.json").read_text())
-    errs = sorted(Draft202012Validator(schema).iter_errors(m), key=lambda e: list(e.absolute_path))
+    errs = sorted(schema_errors(m, schema, schema["$defs"]), key=lambda e: [str(p) for p in e[0]])
     if errs:
-        return [dict(rule="S01", step=1, severity="error", page=None, message=e.message, label=el, element=el)
-                for e in errs for el in ["/".join(map(str, e.absolute_path)) or "(file)"]]
+        return [dict(rule="S01", step=1, severity="error", page=None, message=msg, label=el, element=el)
+                for path, msg in errs for el in ["/".join(map(str, path)) or "(file)"]]
     c = index(m)
     out = []
     for rule, st, sev, page, _, fn in RULES[1:]:
@@ -589,7 +625,7 @@ def part_spec(m, comp, decisions, source):
     sub = set(comps_under(c, comp))
     subleaf, parent, system = c.cleaf & sub, c.comps[comp].get("parent"), named(c, c.sid)
     purpose = (m["system"].get("purpose") or "").rstrip(".")
-    n = max(range(1, 7), key=lambda s: str(decisions[s].get("at")))
+    n = max(range(1, 7), key=lambda s: (str(decisions[s].get("at")), s))   # same minute: the later step
     out = [f"# Spec: {named(c, comp)}", "",
            (f"Part of {system}" if parent == c.sid else f"Part of {named(c, parent)}, in {system}") + (f": {purpose}." if purpose else ".")]
     if comp not in c.cleaf:

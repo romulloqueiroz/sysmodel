@@ -178,6 +178,27 @@ def test_s01_unknown_field():
     assert rules(m) == {"S01"}
 
 
+def test_s01_says_what_is_wrong_and_where():
+    # Our own small checker covers each keyword schema.json uses.
+    m = copy.deepcopy(VALID)
+    del m["system"]["name"]
+    m["requirements"][0]["stage"] = "later"
+    E(m, "items", "I1")["id"] = "9x"
+    m["objectives"] = [{"id": "O1", "name": "a", "weight": 3}]
+    E(m, "interfaces", "IF1")["between"] = ["E1"]
+    m["tests"][0]["method"] = 7
+    m["bogus"] = 1
+    got = {(f["element"], f["message"]) for f in sysmodel.check_model(m)}
+    assert got == {
+        ("(file)", "Additional properties are not allowed ('bogus' unexpected)"),
+        ("system", "'name' is a required property"),
+        ("requirements/0/stage", "'later' is not one of ['build', 'release', 'running', 'updates', 'shutdown']"),
+        ("items/0/id", "'9x' does not match '^[A-Za-z][A-Za-z0-9_.-]*$'"),
+        ("objectives/0/weight", "3 is greater than the maximum of 1"),
+        ("interfaces/0/between", "['E1'] should have at least 2 items"),
+        ("tests/0/method", "7 is not one of ['automated', 'manual']")}
+
+
 def test_r30_parts_are_distinguishable():
     m = copy.deepcopy(VALID)
     spec("Q3")(m)

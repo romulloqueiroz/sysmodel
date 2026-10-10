@@ -1,6 +1,8 @@
 # vendor/
 
-Offline copies of the web libraries and fonts used by `sysmodel serve` (no network needed). Fetched 2026-10-10.
+Bundled copies, so sysmodel needs nothing installed beyond Python 3.9+ and works offline. Fetched 2026-10-10.
+
+- `yaml/` - PyYAML 6.0.3, the pure-Python files of the official wheel from PyPI, unmodified (checked against the wheel's RECORD hashes; the optional C speedup is left out) (MIT, `LICENSES/pyyaml-LICENSE`)
 
 - `rough.js` - roughjs 4.6.6, from https://cdn.jsdelivr.net/npm/roughjs@4.6.6/bundled/rough.js (MIT, `LICENSES/roughjs-LICENSE`)
 - `elk.bundled.js` - elkjs 0.9.3, from https://cdn.jsdelivr.net/npm/elkjs@0.9.3/lib/elk.bundled.js (EPL-2.0, `LICENSES/elkjs-LICENSE.md`)
