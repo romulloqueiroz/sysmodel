@@ -65,7 +65,10 @@ Read the step's guide before working on it. Each says what the step fills in, wh
    - Don't ask how to build it (web or native, which database): that's step 3, unless the engineer sets it as a rule.
    - Where you can propose a sensible value yourself (wording, a technical default), don't ask: use it, give it a
      source of its own titled "Proposed by the AI, to confirm in review", and list it in the hand-off. Never credit
-     a proposal to the engineer's answers.
+     a proposal to the engineer's answers. A requirement with any proposed part (a limit, a design goal, a detail,
+     weights you turned from a ranking) takes the proposal source.
+   - Before the hand-off, ask a last round about anything still open that only the engineer can decide (scope,
+     who may do what). Don't leave it as an open question for the review.
    - Without the AskUserQuestion tool, ask the same small rounds as a numbered list with the suggested answers.
 5. Edit the model. Keep ids stable: links and approvals hang on them. For a new model use short ids like the example's (`Q1`, `F11`, `C2`);
    otherwise follow the style already in the file.
