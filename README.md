@@ -61,6 +61,7 @@ The skill runs these for you; you can run them yourself too.
 python3 sysmodel.py status design/system.yaml       # whose turn each step is
 python3 sysmodel.py check  design/system.yaml       # rule problems, with the book page for each
 python3 sysmodel.py serve  design/system.yaml       # the review app: pictures, approve, send back
+python3 sysmodel.py wait   design/system.yaml       # block until someone approves or sends back a step
 python3 sysmodel.py render design/system.yaml       # a static HTML snapshot to share
 python3 sysmodel.py spec   design/system.yaml C11   # the build spec for one part (once approved)
 ```

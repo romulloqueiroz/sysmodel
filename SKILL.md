@@ -18,6 +18,8 @@ Run `python3 ${CLAUDE_SKILL_DIR}/sysmodel.py <command> <model>`:
 - `check --step N`: rule problems for steps 1..N, each with the book page. Exits 1 while anything must be fixed.
 - `serve`: the review app where people see the pictures and approve or send back each step. It runs until stopped, so
   start it in the background, once per session, and give the engineer the URL it prints. It reloads by itself when the model changes.
+- `wait`: blocks until a person approves or sends back a step in `serve`, then prints the decision and the note.
+  Start it in the background after each hand-off; when it ends, you are woken to carry on, with no prompt needed.
 - `render`: a static HTML snapshot next to the model, for sharing. Read-only.
 - `spec <model> <component>`: the build spec for one part: its scenarios, jobs, connections, requirements and tests, taken from
   the model. It refuses until all six steps are approved.
@@ -53,7 +55,7 @@ Read the step's guide before working on it. Each says what the step fills in, wh
 
 ## The loop
 
-1. Run `status`. Work on the **Next** step when it is the AI's turn. When it waits for a person, say so and stop; work
+1. Run `status`. Work on the **Next** step when it is the AI's turn. When it waits for a person, say so, start `wait` in the background and stop; work
    ahead on a later step only if the engineer asks. When all six are approved, go to Building.
 2. Read that step's guide, then the model and `decisions.md`.
 3. If the step was sent back, the note is your task list. Handle every point in it; ask about any point you don't understand.
@@ -78,7 +80,7 @@ Read the step's guide before working on it. Each says what the step fills in, wh
    otherwise follow the style already in the file.
 6. Run `check --step N` until nothing must be fixed. Read the warnings: fix them, or say in `decisions.md` why they stay.
 7. Run `status` and confirm the step now waits for a person.
-8. Hand off (below).
+8. Hand off (below), then start `wait` in the background. When it ends, start again at 1.
 
 ## Approved steps are a baseline
 
@@ -124,7 +126,7 @@ the full detail is in `decisions.md`:
 - what you added or changed, by step;
 - what you assumed, and the questions still open;
 - what the guide asked you to bring up that the model can't hold (alternatives you weighed and why you chose, risks);
-- which step to review now, at the `serve` URL.
+- which step to review now, at the `serve` URL, and that you will see their decision there without being told.
 
 ## The book
 

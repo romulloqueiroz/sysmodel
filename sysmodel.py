@@ -11,6 +11,7 @@ import os
 import re
 import sys
 import threading
+import time
 import webbrowser
 from collections import defaultdict
 from datetime import datetime
@@ -607,6 +608,16 @@ def render(m, step=6, decisions=None, live=None):
     blob = json.dumps(data, ensure_ascii=False, default=str).replace("</", "<\\/")
     return Path(__file__).with_name("render.html").read_text().replace("/*DATA*/null", blob)
 
+def wait_for_review(model, every=1.0):
+    """Block until a person approves or sends back a step in `serve`; returns {step: decision} for what changed."""
+    path = review_path(model)
+    before = load_reviews(path)
+    while True:
+        time.sleep(every)
+        changed = {n: d for n, d in load_reviews(path).items() if d != before.get(n)}
+        if changed:
+            return changed
+
 STARTED = {  # does the model have anything for this step yet?
     1: lambda m: m.get("requirements"), 2: lambda m: m.get("functions"), 3: lambda m: m.get("components"),
     4: lambda m: any(f.get("runs_in") for f in m.get("functions") or []),
@@ -918,6 +929,8 @@ def main(argv=None):
     r.add_argument("-o", "--out", help="output .html file (default: next to the model)")
     st = sub.add_parser("status", help="where each step stands: done, the AI's turn, or waiting for a review")
     st.add_argument("model")
+    w = sub.add_parser("wait", help="wait until a person approves or sends back a step in `serve`, then print it")
+    w.add_argument("model")
     sp = sub.add_parser("spec", help="print the build spec for one part (component) of an approved design")
     sp.add_argument("model")
     sp.add_argument("component")
@@ -937,6 +950,15 @@ def main(argv=None):
             srv.serve_forever()
         except KeyboardInterrupt:
             pass
+        return 0
+    if args.cmd == "wait":
+        if not Path(args.model).is_file():
+            sys.exit(f"cannot find {args.model}")
+        for n, d in sorted(wait_for_review(args.model).items()):
+            print(f"Step {n} {STEPS[n]}: {d.get('decision')} by {d.get('by')}, {str(d.get('at', '')).replace('T', ' ')}")
+            if d.get("note"):
+                print(f"Note: {d['note']}")
+        print("\nRun `status` and go on with the loop.")
         return 0
     try:
         m = yaml.safe_load(Path(args.model).read_text())

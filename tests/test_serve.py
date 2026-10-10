@@ -193,3 +193,19 @@ def test_skill_links_resolve():
     import re
     for link in re.findall(r"\]\(([^)]+\.md)\)", (HERE.parent / "SKILL.md").read_text()):
         assert (HERE.parent / link).is_file(), link
+
+
+def test_wait_returns_when_a_person_decides(tmp_path, capsys, monkeypatch):
+    model = tmp_path / "app.yaml"
+    model.write_text(yaml.safe_dump(VALID))
+    path = sysmodel.review_path(model)
+    path.write_text(yaml.safe_dump({1: {"decision": "approved", "by": "ana", "at": "2026-10-10T09:00"}}))
+    sent = {"decision": "sent back", "by": "ana", "at": "2026-10-10T09:05", "note": "Split Q7"}
+    real_sleep = sysmodel.time.sleep
+    def decide_then_sleep(_):                                      # the person clicks while wait polls
+        path.write_text(yaml.safe_dump({1: {"decision": "approved", "by": "ana", "at": "2026-10-10T09:00"}, 2: sent}))
+        real_sleep(0)
+    monkeypatch.setattr(sysmodel.time, "sleep", decide_then_sleep)
+    assert sysmodel.main(["wait", str(model)]) == 0
+    assert capsys.readouterr().out == ("Step 2 Functions: sent back by ana, 2026-10-10 09:05\nNote: Split Q7\n\n"
+                                       "Run `status` and go on with the loop.\n")
