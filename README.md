@@ -43,6 +43,8 @@ mkdir -p ~/.claude/skills
 ln -s "$PWD/sysmodel" ~/.claude/skills/sysmodel
 ```
 
+sysmodel is a Claude Code skill, and this folder *is* the skill: `SKILL.md` teaches the AI the method and the commands, and `steps/` holds a guide for each of the six steps, which the AI reads before working on that step. The link makes `/sysmodel` available in every project, and `git pull` keeps it up to date.
+
 Then, in any project:
 
 ```
