@@ -161,7 +161,7 @@ def test_spec_shows_the_scenarios_that_name_the_parts_items(tmp_path, capsys):
                        "steps": ["Marketer sends long url", "System sends Short link to Marketer"]}]
     model = approved(tmp_path, m)
     out = build(model, "C12", capsys)
-    assert ("## Scenarios\n\nThe step 1 stories that mention something this part takes or gives.\n\n"
+    assert ("## Scenarios\n\nThe step 1 scenarios that mention something this part takes or gives.\n\n"
             "### SC1 Visitor follows a short link\n1. Web visitor sends Short code\n2. System sends Redirect to Web visitor\n\n"
             "## Jobs") in out
     assert "SC2" not in out

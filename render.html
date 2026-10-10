@@ -1065,7 +1065,9 @@ dl.facts dd { margin: 0; min-width: 0; display: flex; flex-wrap: wrap; gap: 4px;
       : rule === "R28" ? h("span", { class: "muted small", style: "display:block" }, uniq(list("objectives").map(o => o.parent || "")).map(p => {
           const ws = list("objectives").filter(o => (o.parent || "") === p && o.weight != null);
           return ws.length ? h("span", { style: "display:block" }, `${p ? name(p) : "Top"}: `, ws.map(o => `${name(o.id)}: ${Math.round(o.weight * 100)}%`).join(", ")) : null; }))
-      : rule === "R32" ? h("span", { class: "muted small", style: "display:block" }, "See the AI's notes above") : null;
+      : rule === "R32" ? h("span", { class: "muted small", style: "display:block" }, "See the AI's notes above")
+      : rule === "R19" ? h("span", { class: "muted small", style: "display:block" }, "Compare the Who talks to it and Scenarios tabs")
+      : rule === "R27" ? h("span", { class: "muted small", style: "display:block" }, "See the Requirements tab") : null;
     let note = null;
     if (D.live) {
       note = h("textarea", { id: "review-note", rows: 3, "aria-label": "Note",

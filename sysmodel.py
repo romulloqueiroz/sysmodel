@@ -46,7 +46,7 @@ REFS = [  # (kind, field, allowed target kinds)
 JUDGMENT = [  # (id, step it starts at, book page, text)
     ("R12", 2, 102, "Each job's sub-jobs together do exactly that job: nothing missing, nothing done twice."),
     ("R13", 3, 102, "Each part's sub-parts together make up exactly that part: nothing missing, nothing counted twice."),
-    ("R19", 1, 48, "The outside systems, and what they send and get, match the stories (scenarios)."),
+    ("R19", 1, 48, "The outside systems, and what they send and get, match the scenarios."),
     ("R27", 1, 58, "Each requirement says one testable thing, with a number and units when it measures something."),
     ("R28", 1, 141, "The weights for comparing designs follow your priorities."),
     ("R31", 1, 138, "Neither the purpose nor any requirement names a product, technology or host, "
@@ -816,7 +816,7 @@ def part_spec(m, comp, decisions, source):
     said = lambda step: any(re.search(rf"(?<!\w){re.escape(n)}(?!\w)", step, re.I) for n in names_used)
     stories = [s for s in m.get("scenarios") or [] if any(said(x) for x in s["steps"])]   # R19 keeps the words in step with the items
     if stories:
-        out += ["## Scenarios", "", "The step 1 stories that mention something this part takes or gives.", ""]
+        out += ["## Scenarios", "", "The step 1 scenarios that mention something this part takes or gives.", ""]
         for s in stories:
             out += [f"### {s['id']} {s['name']}"] + [f"{n}. {x}" for n, x in enumerate(s["steps"], 1)] + [""]
     out += ["## Jobs", ""]
