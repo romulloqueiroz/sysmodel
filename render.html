@@ -1023,12 +1023,13 @@ dl.facts dd { margin: 0; min-width: 0; display: flex; flex-wrap: wrap; gap: 4px;
     const mine = noteSections().find(x => x.n === S.step);
     return mine && mine.rest.trim() ? h("div", { class: "notes" }, h("h4", {}, "The AI's notes"), mdBlocks(mine.rest)) : null;
   }
+  const idLink = id => h("button", { class: "link", title: name(id), onclick: () => goTo(id) }, id);   // the notes name things themselves
   function mdIds(t) {   // plain text: known model ids become links
-    return t.split(/([\w-]+(?:\.[\w-]+)*)/).map(p => p && Object.hasOwn(byId, p) ? link(p) : p);
+    return t.split(/([\w-]+(?:\.[\w-]+)*)/).map(p => p && Object.hasOwn(byId, p) ? idLink(p) : p);
   }
   function mdInline(t) {
     return t.split(/(\*\*.+?\*\*|`[^`]+`)/).map(p => p.startsWith("**") && p.length > 4 ? h("b", {}, p.slice(2, -2))
-      : p.startsWith("`") && p.length > 2 ? (Object.hasOwn(byId, p.slice(1, -1)) ? link(p.slice(1, -1)) : h("code", {}, p.slice(1, -1))) : mdIds(p));
+      : p.startsWith("`") && p.length > 2 ? (Object.hasOwn(byId, p.slice(1, -1)) ? idLink(p.slice(1, -1)) : h("code", {}, p.slice(1, -1))) : mdIds(p));
   }
   function mdBlocks(text) {
     const out = [], L = text.split("\n"), cells = l => l.trim().replace(/^\||\|$/g, "").split("|").map(c => c.trim());
@@ -1065,6 +1066,9 @@ dl.facts dd { margin: 0; min-width: 0; display: flex; flex-wrap: wrap; gap: 4px;
       : rule === "R28" ? h("span", { class: "muted small", style: "display:block" }, uniq(list("objectives").map(o => o.parent || "")).map(p => {
           const ws = list("objectives").filter(o => (o.parent || "") === p && o.weight != null);
           return ws.length ? h("span", { style: "display:block" }, `${p ? name(p) : "Top"}: `, ws.map(o => `${name(o.id)}: ${Math.round(o.weight * 100)}%`).join(", ")) : null; }))
+      : rule === "R12" || rule === "R13" ? h("span", { class: "muted small", style: "display:block" },   // each breakdown, parent: children
+          [SID, ...list(rule === "R12" ? "functions" : "components").map(e => e.id)].map(id => [id, (rule === "R12" ? fkids : ckids)(id)])
+            .filter(([, ks]) => ks.length).map(([id, ks]) => h("span", { style: "display:block" }, `${name(id)}: `, ks.map(name).join(", "))))
       : rule === "R32" ? h("span", { class: "muted small", style: "display:block" }, "See the AI's notes above")
       : rule === "R19" ? h("span", { class: "muted small", style: "display:block" }, "Compare the Who talks to it and Scenarios tabs")
       : rule === "R27" ? h("span", { class: "muted small", style: "display:block" }, "See the Requirements tab") : null;
