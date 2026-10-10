@@ -306,6 +306,7 @@ dl.facts dd { margin: 0; min-width: 0; display: flex; flex-wrap: wrap; gap: 4px;
   const reqsOn = id => list("requirements").filter(r => (r.specifies || []).includes(id)).map(r => r.id);
   const testsOf = id => list("tests").filter(t => t.verifies.includes(id)).map(t => t.id);
   const ifacesOf = id => list("interfaces").filter(i => i.between.includes(id)).map(i => i.id);
+  const hasDerived = () => list("requirements").some(r => (r.derived_from || []).length);
   const reqParents = new Set(list("requirements").map(r => r.parent));
   const leafReqs = list("requirements").filter(r => !reqParents.has(r.id));
   const itemFlows = (() => {     // [producer, consumer, item] between leaf jobs and outside systems
@@ -319,6 +320,12 @@ dl.facts dd { margin: 0; min-width: 0; display: flex; flex-wrap: wrap; gap: 4px;
     }
     return out;
   })();
+  const itemEnds = id => {       // [makers, users] of an item; the system stands in for jobs not drafted yet
+    const by = (k, d) => leafFuncs.filter(f => (f[k] || []).includes(id)).map(f => f.id)
+      .concat(list("external").filter(e => (e[d] || []).includes(id)).map(e => e.id));
+    const made = by("outputs", "sends"), used = by("inputs", "receives");
+    return [made.length ? made : [SID], used.length ? used : [SID]];
+  };
 
   // ---------------- problems ----------------
   const probsOf = {};
@@ -435,11 +442,17 @@ dl.facts dd { margin: 0; min-width: 0; display: flex; flex-wrap: wrap; gap: 4px;
       locate: id => kindOf(id) === "requirement" ? true : null },
     scenarios: { step: 1, label: "Scenarios", type: "scenarios", has: () => list("scenarios").length > 0,
       locate: id => kindOf(id) === "scenario" ? true : null },
+    people: { step: 1, label: "People & sources", type: "people", has: () => list("stakeholders").length > 0 || list("sources").length > 0,
+      locate: id => ["stakeholder", "source"].includes(kindOf(id)) ? true : null },
+    items1: { step: 1, label: "Items", type: "items", has: () => list("items").length > 0, locate: id => kindOf(id) === "item" ? true : null },
     functions: { step: 2, label: "Jobs", type: "zoom", empty: "No jobs yet. Add functions to the model to see them here.",
       has: () => list("functions").length > 0, start: () => fkids(SID).length === 1 ? fkids(SID)[0] : SID,
       z: { kids: fkids, up: fpar, kind: id => id === SID ? "system" : "function", links: itemFlows },
       locate: id => kindOf(id) === "function" ? fpar(id) : kindOf(id) === "item" ? true : null,
       outline: () => [tree(SID, fkids)] },
+    items2: { step: 2, label: "Items", type: "items", has: () => list("items").length > 0, locate: id => kindOf(id) === "item" ? true : null },
+    jobs: { step: 2, label: "Job details", type: "jobs", has: () => leafFuncs.length > 0, locate: id => kindOf(id) === "function" ? true : null },
+    scenarios2: { step: 2, label: "Scenarios", type: "scenarios", has: () => list("scenarios").length > 0, locate: id => kindOf(id) === "scenario" ? true : null },
     parts: { step: 3, label: "Parts", type: "zoom", empty: "No parts yet. Add components to the model to see them here.",
       has: () => list("components").length > 0, start: () => SID,
       z: { kids: ckids, up: cpar, kind: compKind, links: [] },
@@ -451,11 +464,15 @@ dl.facts dd { margin: 0; min-width: 0; display: flex; flex-wrap: wrap; gap: 4px;
            up: id => kindOf(id) === "function" ? placedIn(id) : cpar(id) },
       locate: id => kindOf(id) === "function" ? (placedIn(id) === SID ? SID : cpar(placedIn(id))) : kindOf(id) === "component" ? cpar(id) : kindOf(id) === "item" ? true : null,
       outline: () => [tree(SID, id => kindOf(id) === "function" ? [] : ckids(id).concat(matchInner(id)))] },
+    derived4: { step: 4, label: "Derived requirements", type: "requirements", derived: true, has: () => hasDerived(),
+      locate: id => kindOf(id) === "requirement" && el(id).derived_from?.length ? true : null },
     connections: { step: 5, label: "Connections", type: "zoom", empty: "No connections yet. Add interfaces to the model to see them here.",
       has: () => list("interfaces").length > 0, start: () => SID,
       z: { kids: ckids, up: cpar, kind: compKind, undirected: true, links: list("interfaces").map(i => [i.between[0], i.between[1], i.id]) },
       locate: id => kindOf(id) === "component" ? cpar(id) : ["interface", "external"].includes(kindOf(id)) ? true : null,
       outline: () => [tree(SID, ckids)] },
+    derived5: { step: 5, label: "Derived requirements", type: "requirements", derived: true, has: () => hasDerived(),
+      locate: id => kindOf(id) === "requirement" && el(id).derived_from?.length ? true : null },
     tests: { step: 6, label: "Test plan", type: "tests", has: () => leafReqs.length > 0,
       locate: id => ["requirement", "test"].includes(kindOf(id)) ? true : null },
   };
@@ -745,7 +762,7 @@ dl.facts dd { margin: 0; min-width: 0; display: flex; flex-wrap: wrap; gap: 4px;
   });
   addEventListener("keydown", e => {
     if (e.target.closest?.("input, textarea, select") || e.metaKey || e.ctrlKey || e.altKey) return;
-    const diagram = S.view && VIEWS[S.view].type !== "requirements" && VIEWS[S.view].type !== "tests" && VIEWS[S.view].type !== "scenarios";
+    const diagram = S.view && ["diagram", "zoom"].includes(VIEWS[S.view].type);
     if (e.key === "[") togglePanel("left");
     else if (e.key === "]") togglePanel("right");
     else if (e.key === "Escape" && S.sel) select(null);
@@ -896,7 +913,7 @@ dl.facts dd { margin: 0; min-width: 0; display: flex; flex-wrap: wrap; gap: 4px;
     const v = VIEWS[S.view], page = $("page");
     if (pageKey !== S.view) {
       pageKey = S.view;
-      page.replaceChildren(v.type === "requirements" ? reqTable() : v.type === "tests" ? testTable() : scenarioList());
+      page.replaceChildren(({ requirements: () => reqTable(!!v.derived), tests: testTable, people: peopleTable, items: itemTable, jobs: jobTable })[v.type]?.() || scenarioList());
       page.scrollTop = 0;
     }
     page.querySelectorAll("tr[data-id]").forEach(r => r.setAttribute("aria-selected", r.dataset.id === S.sel ? "true" : "false"));
@@ -918,36 +935,63 @@ dl.facts dd { margin: 0; min-width: 0; display: flex; flex-wrap: wrap; gap: 4px;
     q.oninput = apply; only.onchange = apply; apply();
     return h("div", { class: "tools" }, q, h("label", {}, only, toggleLabel), shown);
   }
-  const rowClick = e => { const r = e.target.closest("tr[data-id]"); if (r) select(r.dataset.id); };
+  const rowClick = e => { const r = e.target.closest("tr[data-id]"); if (r && !e.target.closest(".link")) select(r.dataset.id); };
   const proposed = r => /^Proposed by the AI/.test(el(r.source)?.title || "");
-  function reqTable() {
-    const rows = list("requirements").map(r => reqParents.has(r.id)
-      ? h("tr", { class: "group" }, h("td", { colspan: 5 }, r.text))
+  const linkList = ids => (ids || []).flatMap((x, i) => [i ? ", " : null, link(x)]);
+  const fromCell = r => (r.derived_from || []).length ? ["from ", linkList(r.derived_from)] : r.source ? link(r.source) : "";
+  function reqTable(derivedOnly) {
+    const src = list("requirements").filter(r => !derivedOnly || (r.derived_from || []).length);
+    const rows = src.map(r => reqParents.has(r.id)
+      ? h("tr", { class: "group" }, h("td", { colspan: 7 }, r.text))
       : h("tr", { "data-id": r.id }, h("td", { class: "id" }, r.id), h("td", {}, r.text, proposed(r) ? [" ", h("span", { class: "chip advice" }, "proposed")] : null),
-          h("td", {}, [r.category, r.subcategory].filter(Boolean).join(" / ")), h("td", {}, r.stage || ""),
+          h("td", {}, r.threshold || ""), h("td", {}, [r.category, r.subcategory].filter(Boolean).join(" / ")), h("td", {}, r.stage || ""),
+          h("td", {}, fromCell(r)),
           h("td", {}, badge(r.id) ? h("span", { class: "chip error" }, `${badge(r.id)} to fix`) : "")));
     const tbody = h("tbody", { onclick: rowClick }, rows);
+    const tip = { Kind: "io = what goes in and out. system-wide = limits for the whole app. trade-off = how to compare designs. qualification = how it gets checked.",
+      Stage: "build = making the app. release = the app in use." };
     return h("div", {}, filterable(rows, "Search requirements", "Only ones with problems", id => badge(id) > 0),
-      h("table", {}, h("thead", {}, h("tr", {}, ["Id", "The system shall…", "Kind", "Stage", ""].map(t => h("th", {}, t)))), tbody));
+      h("table", {}, h("thead", {}, h("tr", {}, ["Id", "The system shall…", "Threshold", "Kind", "Stage", derivedOnly ? "Derived from" : "From", ""].map(t => h("th", { title: tip[t] }, t)))), tbody));
   }
   const needsTest = r => ["io", "system-wide"].includes(r.category);
   function testTable() {
     const rows = leafReqs.map(r => {
       const ts = testsOf(r.id);
       const chip = ts.length ? h("span", { class: "chip ok" }, "Covered") : needsTest(r) ? h("span", { class: "chip error" }, "Needs a test") : h("span", { class: "chip advice" }, "Optional");
-      return h("tr", { "data-id": r.id }, h("td", { class: "id" }, r.id), h("td", {}, r.text), h("td", {}, chip),
-        h("td", {}, ts.map(t => `${name(t)} (${el(t).method})`).join("; ")));
+      return h("tr", { "data-id": r.id }, h("td", { class: "id" }, r.id), h("td", {}, r.text), h("td", {}, r.threshold || ""), h("td", {}, chip),
+        h("td", {}, ts.map(t => h("div", {}, h("b", {}, name(t)), ` (${el(t).method})`, el(t).description ? h("div", { class: "muted small" }, el(t).description) : null,
+          (el(t).scenarios || []).length ? h("div", { class: "small" }, "Scenarios: ", linkList(el(t).scenarios)) : null))));
     });
     const tbody = h("tbody", { onclick: rowClick }, rows);
     return h("div", {}, filterable(rows, "Search requirements", "Only ones missing a test", id => !testsOf(id).length && needsTest(el(id))),
-      h("table", {}, h("thead", {}, h("tr", {}, ["Id", "Requirement", "Status", "Tests"].map(t => h("th", {}, t)))), tbody));
+      h("table", {}, h("thead", {}, h("tr", {}, ["Id", "Requirement", "Threshold", "Status", "Tests"].map(t => h("th", {}, t)))), tbody));
   }
+  function simpleTable(rows, heads, placeholder) {
+    return h("div", {}, filterable(rows, placeholder, "Only ones with problems", id => badge(id) > 0),
+      h("table", {}, h("thead", {}, h("tr", {}, heads.map(t => h("th", {}, t)))), h("tbody", { onclick: rowClick }, rows)));
+  }
+  const peopleTable = () => simpleTable(
+    list("stakeholders").map(s => h("tr", { "data-id": s.id }, h("td", { class: "id" }, s.id), h("td", {}, "Person"), h("td", {}, s.name),
+      h("td", {}, linkList(list("sources").filter(x => x.stakeholder === s.id).map(x => x.id)))))
+    .concat(list("sources").map(x => h("tr", { "data-id": x.id }, h("td", { class: "id" }, x.id), h("td", {}, "Source"), h("td", {}, x.title),
+      h("td", {}, x.stakeholder ? ["names ", link(x.stakeholder)] : "")))),
+    ["Id", "", "Name or title", "Named in sources"], "Search people and sources");
+  const uniq = a => a.filter((x, i) => a.indexOf(x) === i);
+  const itemTable = () => simpleTable(list("items").map(it => h("tr", { "data-id": it.id }, h("td", { class: "id" }, it.id), h("td", {}, it.name), h("td", {}, it.description || ""),
+    h("td", {}, linkList(itemEnds(it.id)[0])), h("td", {}, linkList(itemEnds(it.id)[1])))),
+    ["Id", "Item", "Holds", "Comes from", "Goes to"], "Search items");
+  const jobTable = () => simpleTable(leafFuncs.map(f => h("tr", { "data-id": f.id }, h("td", { class: "id" }, f.id), h("td", {}, f.name),
+    h("td", {}, linkList(f.inputs)), h("td", {}, linkList(f.outputs)), h("td", {}, f.done_when || ""))),
+    ["Id", "Job", "Takes in", "Gives out", "Done when"], "Search jobs");
   const scenarioList = () => h("div", { class: "scen" }, list("scenarios").map(sc =>
     h("div", { class: "card" }, h("h3", {}, sc.name), h("ol", {}, sc.steps.map(t => h("li", {}, t))))));
 
   // ---------------- right: details ----------------
+  const accepted = f => { const re = /^\s*(?:[-*]\s+)?Accepted:\s*(\S+)\s+(\S+):\s+(.+)$/gm; let a, out = null;
+    while ((a = re.exec(D.notes || ""))) if (a[1] === f.rule && a[2] === f.element) out = a[3].trim(); return out; };
   const probCards = fs => h("div", { class: "probs" }, fs.map(f => h("button", { class: "prob", onclick: () => byId[f.element] && goTo(f.element) },
     h("span", { class: `chip ${f.severity}` }, SEV[f.severity]), h("b", {}, byId[f.element] ? shortName(f.element) : f.element), ": ", f.message,
+    accepted(f) ? h("span", { class: "ref" }, `Accepted: ${accepted(f)}`) : null,
     h("span", { class: "ref" }, `Rule ${f.rule}${f.page ? ` · book p.${f.page}` : ""}`))));
   function summary() {
     const st = STEPS[S.step], fs = D.findings.filter(f => f.step === S.step);
@@ -1016,7 +1060,12 @@ dl.facts dd { margin: 0; min-width: 0; display: flex; flex-wrap: wrap; gap: 4px;
     if (dr.msg) { delete dr.msg; saveDrafts(); }
     const tick = j => e => { dr.checked = e.target.checked ? [...dr.checked, j.rule] : dr.checked.filter(r => r !== j.rule); saveDrafts(); };
     const ch = D.review[n]?.changed, chIds = ch ? ["added", "changed", "removed"].filter(k => ch[k]?.length) : [];
-    const guard = approveBlock(n);
+    const guard = approveBlock(n), warns = D.findings.filter(f => f.step === n && f.severity === "warning").length;
+    const evidence = rule => rule === "R31" && m.system.purpose ? h("span", { class: "muted small", style: "display:block" }, `Purpose: ${m.system.purpose}`)
+      : rule === "R28" ? h("span", { class: "muted small", style: "display:block" }, uniq(list("objectives").map(o => o.parent || "")).map(p => {
+          const ws = list("objectives").filter(o => (o.parent || "") === p && o.weight != null);
+          return ws.length ? h("span", { style: "display:block" }, `${p ? name(p) : "Top"}: `, ws.map(o => `${name(o.id)}: ${Math.round(o.weight * 100)}%`).join(", ")) : null; }))
+      : rule === "R32" ? h("span", { class: "muted small", style: "display:block" }, "See the AI's notes above") : null;
     let note = null;
     if (D.live) {
       note = h("textarea", { id: "review-note", rows: 3, "aria-label": "Note",
@@ -1033,7 +1082,8 @@ dl.facts dd { margin: 0; min-width: 0; display: flex; flex-wrap: wrap; gap: 4px;
       js.length ? h("div", {}, h("p", { class: "small muted", style: "margin-bottom:8px" }, "Only a person can judge these:"),
         h("ul", { class: "checks" }, js.map(j => h("li", {}, h("label", {},
           h("input", { type: "checkbox", checked: dr.checked.includes(j.rule), onchange: tick(j) }),
-          h("span", {}, j.text, h("span", { class: "muted small" }, ` · ${j.rule}, book p.${j.page}`))))))) : null,
+          h("span", {}, j.text, h("span", { class: "muted small" }, ` · ${j.rule}, book p.${j.page}`), evidence(j.rule))))))) : null,
+      warns ? h("p", { class: "small" }, `Approving also accepts ${warns === 1 ? "this 1 warning" : `these ${warns} warnings`}.`) : null,
       note,
       D.live ? h("div", { class: "btnrow" },
         h("button", { class: "primary", disabled: errors > 0 || !!guard, onclick: () => decide(n, "approved") }, `Approve step ${n}`),
@@ -1041,6 +1091,14 @@ dl.facts dd { margin: 0; min-width: 0; display: flex; flex-wrap: wrap; gap: 4px;
       D.live && guard ? h("p", { class: "small muted" }, guard) : null,
       D.live && !guard && errors ? h("p", { class: "small muted" }, `You can approve once the ${errors} must-fix problems above are fixed.`) : null,
       D.live ? msg : h("p", { class: "small muted" }, "To approve or send back, open this model with ", h("code", {}, "sysmodel serve"), "."));
+  }
+  function answersFor(src) {   // the dated rounds of answers.md that this source's title names
+    if (!D.answers || !/^answers\.md/.test(src.title || "")) return null;
+    const secs = D.answers.split(/^(?=## )/m).filter(x => x.startsWith("## "));
+    const pick = secs.filter(x => { const d = /^## (\S+)/.exec(x)?.[1]; return d && src.title.includes(d); });
+    return h("div", { class: "notes", style: "width:100%" }, (pick.length ? pick : secs).map(x => {
+      const nl = x.indexOf("\n"), head = (nl < 0 ? x : x.slice(0, nl)).replace(/^##\s*/, "");
+      return [h("h5", {}, head), mdBlocks(nl < 0 ? "" : x.slice(nl + 1))]; }));
   }
   function facts(id) {
     const k = kindOf(id), e = el(id), F = [];
@@ -1056,10 +1114,9 @@ dl.facts dd { margin: 0; min-width: 0; display: flex; flex-wrap: wrap; gap: 4px;
       add("Jobs", links(jobs)); add("Connections", links(ifacesOf(id))); add("Requirements", links(reqsOn(id))); }
     if (k === "external") { add("Type", KIND[e.kind][0]); add("Sends", links(e.sends)); add("Receives", links(e.receives)); add("Connections", links(ifacesOf(id))); }
     if (k === "item") {
-      add("Holds", e.description); add("Made by", links(itemFlows.filter(f => f[2] === id).map(f => f[0]).filter((x, i, a) => a.indexOf(x) === i)));
-      add("Used by", links(itemFlows.filter(f => f[2] === id).map(f => f[1]).filter((x, i, a) => a.indexOf(x) === i)));
+      add("Holds", e.description); add("Made by", links(itemEnds(id)[0])); add("Used by", links(itemEnds(id)[1]));
       add("Carried by", links(list("interfaces").filter(i => i.carries.includes(id)).map(i => i.id))); add("Requirements", links(reqsOn(id))); }
-    if (k === "interface") { add("Between", links(e.between)); add("Carries", links(e.carries)); }
+    if (k === "interface") { add("Between", links(e.between)); add("Carries", links(e.carries)); add("Requirements", links(reqsOn(id))); }
     if (k === "requirement") { add("Kind", [e.category, e.subcategory].filter(Boolean).join(" / ")); add("Stage", e.stage); add("Threshold", e.threshold);
       add("Group", e.parent ? link(e.parent) : null); add("Comes from", links([e.source, ...(e.derived_from || [])].filter(Boolean)));
       add("Applies to", links(e.specifies)); add("Objective", e.objective ? link(e.objective) : null); add("Proven by", links(testsOf(id)));
@@ -1067,8 +1124,10 @@ dl.facts dd { margin: 0; min-width: 0; display: flex; flex-wrap: wrap; gap: 4px;
     if (k === "objective") { add("Part of", e.parent ? link(e.parent) : null); add("Weight", e.weight != null ? `${Math.round(e.weight * 100)}%` : null);
       add("Smaller objectives", links(okids(id))); add("Requirements", links(list("requirements").filter(r => r.objective === id).map(r => r.id))); }
     if (k === "test") { add("Checks", e.description); add("How", e.method === "automated" ? "Automated test" : "Manual check"); add("Proves", links(e.verifies)); }
-    if (k === "source") { add("Title", e.title); add("From", e.stakeholder ? link(e.stakeholder) : null); }
-    if (k === "scenario") add("Steps", h("ol", { style: "margin:0;padding-left:1.2em" }, e.steps.map(t => h("li", {}, t))));
+    if (k === "source") { add("Title", e.title); add("From", e.stakeholder ? link(e.stakeholder) : null); add("Answers", answersFor(e)); }
+    if (k === "stakeholder") add("Named in", links(list("sources").filter(x => x.stakeholder === id).map(x => x.id)));
+    if (k === "scenario") { add("Steps", h("ol", { style: "margin:0;padding-left:1.2em" }, e.steps.map(t => h("li", {}, t))));
+      add("Tests", links(list("tests").filter(t => (t.scenarios || []).includes(id)).map(t => t.id))); }
     return F;
   }
   function details(id) {

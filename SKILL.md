@@ -87,7 +87,8 @@ Read the step's guide before working on it. Each says what the step fills in, wh
    - Without the AskUserQuestion tool, ask the same small rounds as a numbered list with the suggested answers.
 5. Edit the model. Keep ids stable: links and approvals hang on them. For a new model use short ids like the example's (`Q1`, `F11`, `C2`);
    otherwise follow the style already in the file.
-6. Run `check --step N` until nothing must be fixed. Read the warnings: fix them, or say in `decisions.md` why they stay.
+6. Run `check --step N` until nothing must be fixed. Read the warnings: fix them, or say in `decisions.md` why they stay, one line
+   each as `Accepted: <rule> <id>: <reason>` (the review page shows it on the warning).
 7. Run `status` and confirm the step now waits for a person.
 8. Write `decisions.md`, start `wait` in the background, then hand off in chat (below). Starting `wait` first matters: the page
    accepts an approval only for steps it handed off. If `wait` exits 2, start `serve` again, then `wait`. When it ends, start

@@ -256,10 +256,10 @@ def test_s01_says_what_is_wrong_and_where():
 def test_r30_parts_are_distinguishable():
     m = copy.deepcopy(VALID)
     spec("Q3")(m)
-    assert [f["message"][:3] for f in sysmodel.check_model(m) if f["rule"] == "R30"] == ["(a)"]
+    assert [f["message"] for f in sysmodel.check_model(m) if f["rule"] == "R30"] == ["nothing it points to runs in a part; match its job to a part"]
     m = copy.deepcopy(VALID)
     drop(m, "interfaces", "IF1")
-    assert {f["message"][:3] for f in sysmodel.check_model(m) if f["rule"] == "R30"} == {"(b)"}
+    assert all("no connection carries it" in f["message"] for f in sysmodel.check_model(m) if f["rule"] == "R30")
 
 
 def test_interface_at_parent_covers_children():
@@ -267,7 +267,7 @@ def test_interface_at_parent_covers_children():
     m = copy.deepcopy(VALID)
     E(m, "interfaces", "IF2")["between"] = ["C11", "C2"]
     msgs = [f["message"] for f in sysmodel.check_model(m) if f["rule"] == "R30"]
-    assert len(msgs) == 1 and "C2 -> C12" in msgs[0]
+    assert len(msgs) == 1 and "from C2 to C12" in msgs[0]
 
 
 def msgs(m, rule, step=6):
@@ -277,15 +277,15 @@ def msgs(m, rule, step=6):
 def test_r18_says_what_the_outside_system_lacks():
     m = copy.deepcopy(VALID)
     add_e2(m)
-    assert msgs(m, "R18") == [("E2", "exchanges no items: an outside system is defined by what it sends or receives; "
-                                      "if it only constrains requirements, make it a source; "
-                                      "if it is a design choice, it belongs in step 3")]
+    assert msgs(m, "R18") == [("E2", "sends and receives nothing; an outside system must exchange items. "
+                                      "If it only sets requirements, make it a source; "
+                                      "if it is a design choice, move it to step 3")]
     m = copy.deepcopy(VALID)
     E(m, "external", "E1").update(sends=[], receives=["I2", "I4"], kind="context")
-    assert [x[1][:20] for x in msgs(m, "R18")] == ["context cannot be af", "context sends no ite"]
+    assert [x[1][:20] for x in msgs(m, "R18")] == ["is background the sy", "sends nothing to the"]
     m = copy.deepcopy(VALID)
     E(m, "external", "E1")["receives"] = []
-    assert msgs(m, "R18") == [("E1", "external receives no items: if the system does not affect it, make it context")]
+    assert msgs(m, "R18") == [("E1", "receives nothing from the system; if the system does not affect it, make its `kind` context")]
     add_e2(m, sends=["I1"])                       # an enabling system may send only
     assert [x[0] for x in msgs(m, "R18")] == ["E1"]
 
@@ -293,16 +293,16 @@ def test_r18_says_what_the_outside_system_lacks():
 def test_r10_converse_names_the_function():
     m = copy.deepcopy(VALID)
     E(m, "external", "E1")["sends"] = ["I1"]
-    assert msgs(m, "R10") == [("F12", "takes I3, which no leaf function gives and no outside system sends")]
+    assert msgs(m, "R10") == [("F12", "takes in I3, but no other job and no outside system provides it")]
     m = copy.deepcopy(VALID)
     E(m, "external", "E1")["receives"] = ["I2"]
-    assert msgs(m, "R10") == [("F12", "gives I4, which no leaf function takes and no outside system receives")]
+    assert msgs(m, "R10") == [("F12", "gives out I4, but no other job and no outside system uses it")]
 
 
 def test_r05_item_must_belong_to_a_specified_leaf():
     m = copy.deepcopy(VALID)
     spec("Q2", "I1", "I3", "F11")(m)
-    assert msgs(m, "R05") == [("Q2", "specifies I3, which none of the leaf functions it specifies takes or gives")]
+    assert msgs(m, "R05") == [("Q2", "`specifies` lists I3, but none of the jobs it lists takes or gives it")]
     spec("Q2", "I1", "I3", "F11", "F12")(m)           # I3 is F12's input
     assert msgs(m, "R05") == []
 
@@ -310,7 +310,7 @@ def test_r05_item_must_belong_to_a_specified_leaf():
 def test_r11_finds_derived_from_loops():
     m = copy.deepcopy(VALID)
     E(m, "requirements", "Q1")["derived_from"] = ["Q1"]
-    assert msgs(m, "R11") == [("Q1", "derived_from chain loops back to itself")]
+    assert msgs(m, "R11") == [("Q1", "`derived_from` links go in a circle; break the loop")]
     m = copy.deepcopy(VALID)
     E(m, "requirements", "Q1")["derived_from"] = ["Q2"]
     E(m, "requirements", "Q2")["derived_from"] = ["Q1"]
@@ -325,7 +325,7 @@ def test_r23_wants_a_threshold_on_quality_cost_and_schedule():
         m = copy.deepcopy(VALID)
         E(m, "requirements", "Q4").update(subcategory=sub)
         unset("requirements", "Q4", "threshold")(m)
-        assert msgs(m, "R23") == [("Q4", f"{sub} requirement has no threshold")]
+        assert msgs(m, "R23") == [("Q4", f"a {sub} requirement needs a `threshold` (a number with units)")]
     m = copy.deepcopy(VALID)
     E(m, "requirements", "Q4").update(category="trade-off", subcategory="cost")
     unset("requirements", "Q4", "threshold")(m)
@@ -335,18 +335,18 @@ def test_r23_wants_a_threshold_on_quality_cost_and_schedule():
 def test_c01_names_the_item():
     m = copy.deepcopy(VALID)
     spec("Q5", "F1")(m)
-    assert msgs(m, "C01") == [("I3", "E1 sends or receives it, but no io requirement specifies it"),
-                              ("I4", "E1 sends or receives it, but no io requirement specifies it")]
+    assert msgs(m, "C01") == [("I3", "E1 sends or receives it, but no requirement of category io lists it in `specifies`"),
+                              ("I4", "E1 sends or receives it, but no requirement of category io lists it in `specifies`")]
     assert msgs(VALID, "C01") == []
 
 
 def test_c02_c04_c05_c03_messages():
     m = copy.deepcopy(VALID)
     m["objectives"] += [{"id": "O2", "name": "Fast", "parent": "O1"}]
-    assert msgs(m, "C02") == [("O2", "leaf objective that no requirement names in `objective`")]
+    assert msgs(m, "C02") == [("O2", "no requirement points to this goal in `objective`")]
     m = copy.deepcopy(VALID)
     E(m, "objectives", "O1")["weight"] = 0.9
-    assert msgs(m, "C04") == [("O1", "objective weights at the top sum to 0.9, expected 1")]
+    assert msgs(m, "C04") == [("O1", "goal weights at the top add up to 0.9, they should add up to 1")]
     E(m, "objectives", "O1")["weight"] = 0.995                     # within the tolerance
     assert msgs(m, "C04") == []
     m["objectives"] += [{"id": "O2", "name": "Fast", "parent": "O1", "weight": 0.5},
@@ -356,10 +356,10 @@ def test_c02_c04_c05_c03_messages():
     E(m, "objectives", "O4")["weight"] = 0.3
     assert msgs(m, "C04") == []
     E(m, "objectives", "O4")["weight"] = 0.4
-    assert msgs(m, "C04") == [("O1", "objective weights under O1 sum to 1.1, expected 1")]
+    assert msgs(m, "C04") == [("O1", "goal weights under O1 add up to 1.1, they should add up to 1")]
     m = copy.deepcopy(VALID)
     m["scenarios"] = [{"id": "SC1", "name": "Visit", "steps": ["Web visitor sends Short code"]}]
-    assert msgs(m, "C05") == [("SC1", "no test names this scenario")]
+    assert msgs(m, "C05") == [("SC1", "no test lists this story in `scenarios`")]
     E(m, "tests", "T1")["scenarios"] = ["SC1"]
     assert msgs(m, "C05") == [] and "S03" not in rules(m)
     E(m, "tests", "T1")["scenarios"] = ["Q1"]
@@ -374,7 +374,7 @@ def test_c02_c04_c05_c03_messages():
 def test_c06_converse_of_r30b():
     m = copy.deepcopy(VALID)
     E(m, "interfaces", "IF2")["carries"] = ["I5", "I6", "I1"]
-    assert msgs(m, "C06") == [("IF2", "carries I1, which no flow between C1 and C2 exchanges")]
+    assert msgs(m, "C06") == [("IF2", "carries I1, but nothing goes between C1 and C2; remove it from `carries`")]
     m = copy.deepcopy(VALID)
     E(m, "interfaces", "IF1")["between"] = ["E1", "S"]           # an end that covers the parts still sees the flows
     assert msgs(m, "C06") == []
@@ -451,7 +451,7 @@ def test_cli_error_line_and_order(tmp_path):
     r = run_cli(tmp_path, m)
     assert r.returncode == 1
     lines = r.stdout.splitlines()
-    assert 'R14 error  F11 "Create short link": not allocated to a component (book p.243)' in lines
+    assert 'R14 error  F11 "Create short link": has no part to run in; set `runs_in` (book p.243)' in lines
     assert lines.index(next(x for x in lines if x.startswith("R14"))) < lines.index(
         next(x for x in lines if x.startswith("R20")))
 
@@ -463,8 +463,8 @@ def test_cli_json(tmp_path):
     out = json.loads(r.stdout)
     assert r.returncode == 0
     assert out["findings"] == [{"rule": "R20", "severity": "warning", "element": "F11",
-                                "message": "no done_when", "page": 58}] + [
-        {"rule": "C03", "severity": "advice", "element": "S", "message": f"no {sub} requirement", "page": 142}
+                                "message": "has no `done_when`; say how to tell the job is finished", "page": 58}] + [
+        {"rule": "C03", "severity": "advice", "element": "S", "message": f"there is no {sub} requirement", "page": 142}
         for sub in ("observance", "verification-plan", "validation-plan", "acceptance-plan")]
     assert [j["rule"] for j in out["judgment"]] == ["R12", "R13", "R19", "R27", "R28", "R31", "R32"]
     assert out["counts"] == {"error": 0, "warning": 1, "advice": 4}
