@@ -311,7 +311,8 @@ dl.facts dd { margin: 0; min-width: 0; display: flex; flex-wrap: wrap; gap: 4px;
   // ---------------- problems ----------------
   const probsOf = {};
   for (const f of D.findings) (probsOf[f.element] ??= []).push(f);
-  const badge = id => (probsOf[id] || []).filter(f => f.severity !== "advice").length;
+  const probs = id => (probsOf[id] || []).filter(f => f.step <= S.step);   // later steps' rules wait for their step
+  const badge = id => probs(id).filter(f => f.severity !== "advice").length;
   const stepCount = s => D.findings.filter(f => f.step === s && f.severity !== "advice").length;
 
   // ---------------- measuring ----------------
@@ -989,7 +990,7 @@ dl.facts dd { margin: 0; min-width: 0; display: flex; flex-wrap: wrap; gap: 4px;
   }
   function details(id) {
     const [word, term] = kindWords(id), v = S.view && VIEWS[S.view];
-    const fs = probsOf[id] || [], F = facts(id);
+    const fs = probs(id), F = facts(id);
     const canOpen = v?.z && v.z.kids(id).length > 0;
     return [
       h("button", { class: "back", onclick: () => select(null) }, "← Step overview"),
