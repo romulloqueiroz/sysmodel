@@ -1,0 +1,1056 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>System model review</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Patrick+Hand&family=Atkinson+Hyperlegible:wght@400;700&display=swap">
+<style>
+/* App layout: steps + outline on the left, the picture (or table) in the middle, details on the right.
+   Below 960px everything stacks into one scrolling column. */
+:root {
+  --paper: #fbfaf7; --ink: #2f2d3a; --muted: #6d6a7c; --line: #e4e1ea; --panel: #ffffff; --hover: #f3f1f8; --grid: #e2dfe9;
+  --sys: #e9e3fb; --comp: #dcf3e6; --func: #ffe4d1; --ext: #dceefc; --enab: #eeedf2; --obj: #fdf0c4;
+  --warn: #e8a33d; --warn-bg: #fdf1dc; --idea: #5b8fd6; --idea-bg: #e3eefb; --ok: #4f9e74; --ok-bg: #e1f3e8;
+  --accent: #6b5bd6; --accent-bg: #ece9fb;
+  --hand: "Patrick Hand", "Comic Sans MS", "Chalkboard SE", cursive;
+  --body: "Atkinson Hyperlegible", system-ui, -apple-system, sans-serif;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --paper: #1d1c24; --ink: #ebe8f4; --muted: #a8a4b8; --line: #34323f; --panel: #24232d; --hover: #2d2b38; --grid: #33313e;
+  --sys: #37304f; --comp: #24402f; --func: #4a3324; --ext: #213a4d; --enab: #2e2d36; --obj: #4a4220;
+  --warn: #f0b660; --warn-bg: #43341b; --idea: #8fb6ec; --idea-bg: #22324a; --ok: #7cc79f; --ok-bg: #1f3a2b;
+  --accent: #a99cf5; --accent-bg: #322d52; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --paper: #1d1c24; --ink: #ebe8f4; --muted: #a8a4b8; --line: #34323f; --panel: #24232d; --hover: #2d2b38; --grid: #33313e;
+  --sys: #37304f; --comp: #24402f; --func: #4a3324; --ext: #213a4d; --enab: #2e2d36; --obj: #4a4220;
+  --warn: #f0b660; --warn-bg: #43341b; --idea: #8fb6ec; --idea-bg: #22324a; --ok: #7cc79f; --ok-bg: #1f3a2b;
+  --accent: #a99cf5; --accent-bg: #322d52; color-scheme: dark }
+
+html, body { height: 100%; }
+[hidden] { display: none !important; }
+body { margin: 0; background: var(--paper); color: var(--ink); font: 15px/1.5 var(--body); }
+button { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+h1, h2, h3, h4, p { margin: 0; }
+.hand { font-family: var(--hand); }
+.muted { color: var(--muted); }
+.small { font-size: .85rem; }
+
+.app { --nav-w: 250px; --side-w: 340px; --lw: var(--nav-w); --rw: var(--side-w);
+       height: 100%; display: grid; grid-template-columns: var(--lw) minmax(0, 1fr) var(--rw);
+       grid-template-rows: auto minmax(0, 1fr); grid-template-areas: "top top top" "nav main side";
+       transition: grid-template-columns .2s ease; }
+.app[data-left="closed"] { --lw: 0px; }
+.app[data-right="closed"] { --rw: 0px; }
+.app.still, .app.still * { transition: none !important; }
+/* panels slide shut; their inner box keeps its width so text never reflows mid-slide */
+.nav, .side { overflow: hidden; min-width: 0; transition: visibility 0s; }
+.app[data-left="closed"] .nav, .app[data-right="closed"] .side { visibility: hidden; border-color: transparent; transition: visibility 0s .2s; }
+
+/* top bar */
+.top { grid-area: top; display: flex; align-items: center; gap: 14px; padding: 8px 10px; background: var(--panel); border-bottom: 1px solid var(--line); min-width: 0; }
+.iconbtn { display: grid; place-items: center; width: 32px; height: 32px; flex: none; border: 0; border-radius: 8px; background: none; color: var(--muted); cursor: pointer; }
+.iconbtn:hover { background: var(--hover); color: var(--ink); }
+.iconbtn[aria-expanded="false"] .fill { opacity: 0; }
+.stepnow { display: none; flex: none; background: var(--accent-bg); border: 0; border-radius: 999px; padding: 2px 12px; cursor: pointer; white-space: nowrap; }
+.app[data-left="closed"] .stepnow { display: inline-block; }
+.top .mark { font: 1.05rem var(--hand); color: var(--accent); white-space: nowrap; }
+.top h1 { font: 1.5rem/1.1 var(--hand); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.top .purpose { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1; }
+.pill { font-size: .8rem; border-radius: 999px; padding: 2px 10px; white-space: nowrap; }
+.pill.warn { background: var(--warn-bg); border: 1px solid var(--warn); }
+.pill.ok { background: var(--ok-bg); }
+
+/* left: steps + outline */
+.nav { grid-area: nav; border-right: 1px solid var(--line); }
+.nav-in { width: var(--nav-w); height: 100%; box-sizing: border-box; overflow: auto; padding: 14px 10px; display: flex; flex-direction: column; gap: 20px; }
+.eyebrow { font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); padding-inline: 8px; }
+.steps { display: grid; gap: 2px; margin-top: 6px; }
+.step { display: grid; grid-template-columns: 28px 1fr auto; gap: 10px; align-items: center; text-align: left; background: none; border: 0; border-radius: 10px; padding: 7px 8px; cursor: pointer; }
+.step:hover:not(:disabled) { background: var(--hover); }
+.step[aria-current="step"] { background: var(--accent-bg); }
+.step:disabled { cursor: default; opacity: .5; }
+.step .n { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font: 1rem var(--hand); border: 1.5px solid var(--muted); }
+.step[aria-current="step"] .n { border-color: var(--accent); color: var(--accent); }
+.step b { font-weight: 700; display: block; }
+.step small { color: var(--muted); display: block; font-size: .78rem; line-height: 1.3; }
+.count { font-size: .75rem; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 999px; display: grid; place-items: center; background: var(--warn-bg); border: 1px solid var(--warn); }
+.count.ok { background: var(--ok-bg); border-color: transparent; color: var(--ok); }
+.count.later { background: none; border: 0; color: var(--muted); }
+.step .n.ok { background: var(--ok); border-color: var(--ok); color: var(--panel); font-family: var(--body); }
+.step .n.back { background: var(--warn-bg); border-color: var(--warn); font-family: var(--body); }
+.step .n.stale { border: 1.5px dashed var(--warn); }
+.vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.tree, .tree ul { list-style: none; margin: 0; padding: 0; }
+.tree ul { padding-left: 14px; border-left: 1px dashed var(--line); margin-left: 12px; }
+.tree { margin-top: 6px; }
+.tree button { display: flex; gap: 6px; align-items: center; width: 100%; text-align: left; background: none; border: 0; border-radius: 8px; padding: 3px 8px; cursor: pointer; font-size: .9rem; }
+.tree button:hover { background: var(--hover); }
+.tree button.here { font-weight: 700; }
+.tree button[aria-selected="true"] { background: var(--accent-bg); }
+.tree .sw { width: 9px; height: 9px; border-radius: 3px; flex: none; border: 1px solid var(--muted); }
+.tree .dotw { width: 7px; height: 7px; border-radius: 50%; background: var(--warn); flex: none; margin-left: auto; }
+
+/* middle */
+.main { grid-area: main; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.bar { display: flex; align-items: center; gap: 12px; padding: 8px 14px; border-bottom: 1px solid var(--line); flex-wrap: wrap; min-height: 46px; box-sizing: border-box; }
+.tabs { display: flex; gap: 4px; flex-wrap: wrap; }
+.tabs button { background: none; border: 1px solid transparent; border-radius: 999px; padding: 3px 12px; cursor: pointer; }
+.tabs button:hover { background: var(--hover); }
+.tabs button[aria-selected="true"] { background: var(--panel); border-color: var(--line); font-weight: 700; }
+.crumbs { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; font: 1.1rem var(--hand); color: var(--muted); }
+.crumbs button { background: none; border: 0; padding: 1px 6px; border-radius: 6px; color: var(--accent); cursor: pointer; }
+.crumbs button:hover { background: var(--hover); }
+.crumbs button[aria-current="true"] { color: var(--ink); cursor: default; background: none; }
+.stage { position: relative; flex: 1; min-height: 0; overflow: hidden; background-color: var(--paper);
+         background-image: radial-gradient(var(--grid) 1.2px, transparent 1.3px); background-size: 22px 22px; }
+.stage svg { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; cursor: grab; display: block; }
+.stage svg.panning { cursor: grabbing; }
+#vp { transform-origin: 0 0; }
+#vp.anim { transition: transform .22s ease-in; }
+#content { transition: opacity .18s ease-out; }
+.node { cursor: pointer; }
+.node:focus-visible { outline: none; }
+.node:focus-visible > rect:first-child { stroke: var(--accent); stroke-width: 2; stroke-dasharray: 4 3; }
+.edge { cursor: pointer; transition: opacity .15s; }
+.edge.dim { opacity: .18; }
+.zoombar { position: absolute; right: 12px; bottom: 12px; display: flex; gap: 2px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 3px; box-shadow: 0 2px 8px rgb(0 0 0 / .06); }
+.zoombar button { background: none; border: 0; min-width: 32px; height: 30px; border-radius: 7px; cursor: pointer; font-variant-numeric: tabular-nums; }
+.zoombar button:hover { background: var(--hover); }
+.hint { position: absolute; left: 12px; bottom: 12px; font-size: .8rem; color: var(--muted); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 4px 10px; max-width: calc(100% - 220px); }
+.emptymsg { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; padding: 24px; font: 1.3rem var(--hand); color: var(--muted); }
+.page { flex: 1; min-height: 0; overflow: auto; padding: 16px; }
+.tools { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
+.tools input[type="search"] { font: inherit; color: inherit; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 5px 10px; min-width: 0; width: 260px; max-width: 100%; }
+.tools label { display: flex; gap: 6px; align-items: center; cursor: pointer; }
+table { border-collapse: collapse; width: 100%; font-size: .92rem; background: var(--panel); border-radius: 10px; }
+th, td { text-align: left; vertical-align: top; padding: 7px 10px; border-bottom: 1px solid var(--line); }
+th { font-weight: 700; font-size: .72rem; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); position: sticky; top: -16px; background: var(--panel); }
+tbody tr[data-id] { cursor: pointer; }
+tbody tr[data-id]:hover { background: var(--hover); }
+tbody tr[aria-selected="true"] { background: var(--accent-bg); }
+td.id { font-variant-numeric: tabular-nums; color: var(--muted); white-space: nowrap; }
+tr.group td { font: 1.1rem var(--hand); color: var(--muted); padding-top: 14px; }
+.chip { display: inline-block; font-size: .72rem; letter-spacing: .04em; text-transform: uppercase; border-radius: 999px; padding: 0 8px; white-space: nowrap; }
+.chip.error { background: var(--warn-bg); border: 1px solid var(--warn); }
+.chip.warning { background: var(--warn-bg); color: var(--muted); }
+.chip.advice { background: var(--idea-bg); }
+.chip.ok { background: var(--ok-bg); }
+.scen { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px; }
+.card h3 { font: 1.25rem var(--hand); margin-bottom: 6px; }
+.card ol { margin: 0; padding-left: 1.3em; display: grid; gap: 4px; }
+
+/* right: inspector */
+.side { grid-area: side; border-left: 1px solid var(--line); background: var(--panel); }
+.side-in { width: var(--side-w); height: 100%; box-sizing: border-box; overflow: auto; padding: 16px; display: flex; flex-direction: column; gap: 18px; }
+.side h2 { font: 1.6rem/1.15 var(--hand); text-wrap: balance; }
+.side h4 { font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 400; margin-bottom: 8px; }
+.back { align-self: flex-start; background: none; border: 0; color: var(--accent); cursor: pointer; padding: 2px 0; }
+.kindline { color: var(--muted); font-size: .85rem; }
+.kindline code { font-size: .8rem; background: var(--hover); border-radius: 5px; padding: 0 5px; }
+.guide { background: var(--hover); border-radius: 10px; padding: 10px 12px; }
+.probs { display: grid; gap: 8px; }
+.prob { display: block; width: 100%; text-align: left; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 9px 11px; cursor: pointer; }
+.prob:hover { border-color: var(--accent); }
+.prob .chip { margin-right: 6px; }
+.prob .ref { display: block; color: var(--muted); font-size: .78rem; margin-top: 2px; }
+.clean { font: 1.15rem var(--hand); color: var(--ok); }
+dl.facts { margin: 0; display: grid; grid-template-columns: minmax(84px, auto) 1fr; gap: 8px 12px; }
+dl.facts dt { color: var(--muted); font-size: .85rem; }
+dl.facts dd { margin: 0; min-width: 0; display: flex; flex-wrap: wrap; gap: 4px; overflow-wrap: anywhere; }
+.link { background: var(--hover); border: 0; border-radius: 6px; padding: 0 7px; cursor: pointer; color: var(--accent); text-align: left; }
+.link:hover { text-decoration: underline; }
+.primary { align-self: flex-start; background: var(--accent); color: var(--panel); border: 0; border-radius: 999px; padding: 6px 16px; cursor: pointer; font-weight: 700; }
+.checks { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.checks label { display: grid; grid-template-columns: auto 1fr; gap: 10px; cursor: pointer; }
+.checks input { margin-top: .3em; accent-color: var(--accent); }
+.review { border: 1px solid var(--line); border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 12px; background: var(--paper); }
+.review h4 { margin-bottom: 0; }
+.revstate .chip { margin-right: 6px; }
+.chip.none { border: 1px solid var(--line); color: var(--muted); }
+.revnote { border-left: 3px solid var(--line); padding-left: 10px; color: var(--muted); white-space: pre-wrap; }
+.review textarea { font: inherit; color: inherit; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; min-height: 76px; resize: vertical; width: 100%; box-sizing: border-box; }
+.btnrow { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.secondary { background: none; border: 1px solid var(--line); border-radius: 999px; padding: 5px 15px; cursor: pointer; }
+.secondary:hover { background: var(--hover); }
+.primary:disabled { opacity: .45; cursor: default; }
+.says { font-size: 1.02rem; }
+
+@media (max-width: 960px) {
+  html, body { height: auto; }
+  .app { display: flex; flex-direction: column; height: auto; min-height: 100%; }
+  .top { flex-wrap: wrap; }
+  .top .purpose { flex-basis: 100%; white-space: normal; }
+  .top .purpose, #status { order: 1; }            /* both panel buttons stay on the first row */
+  .top h1 { flex: 1; min-width: 0; }
+  .nav { border-right: 0; border-bottom: 1px solid var(--line); }
+  .nav-in, .side-in { width: auto; height: auto; overflow: visible; }
+  .nav-in { padding: 8px 16px; }
+  .app[data-left="closed"] .nav, .app[data-right="closed"] .side { display: none; }
+  .nav .eyebrow, .outline { display: none; }
+  .steps { display: flex; overflow-x: auto; gap: 4px; margin: 0; }
+  .step { grid-template-columns: auto auto auto; flex: none; }
+  .step small { display: none; }
+  .bar { padding-inline: 16px; }
+  .stage { flex: none; height: 62vh; min-height: 320px; }
+  .page { padding-inline: 16px; overflow: visible; }
+  .side { border-left: 0; border-top: 1px solid var(--line); }
+  .hint { display: none; }
+  .crumbs > :not(:nth-last-child(-n+3)) { display: none; }   /* phones: only the parent and where you are */
+}
+@media (prefers-reduced-motion: reduce) { #vp.anim, #content, .edge { transition: none; } }
+</style>
+</head>
+<body>
+<div class="app still">
+  <header class="top">
+    <button class="iconbtn" id="tleft" aria-controls="nav" aria-expanded="true" aria-label="Steps panel"><svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><rect x="1.5" y="2.5" width="15" height="13" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M6.5 2.5v13" stroke="currentColor" stroke-width="1.5"/><rect class="fill" x="2.5" y="3.5" width="3.5" height="11" rx="1" fill="currentColor" opacity=".45"/></svg></button>
+    <span class="mark">sysmodel</span>
+    <h1 id="sysname"></h1>
+    <button class="stepnow" id="stepnow" title="Show the steps panel"></button>
+    <span class="purpose" id="purpose"></span>
+    <span id="status"></span>
+    <button class="iconbtn" id="tright" aria-controls="side" aria-expanded="true" aria-label="Details panel"><svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><rect x="1.5" y="2.5" width="15" height="13" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M11.5 2.5v13" stroke="currentColor" stroke-width="1.5"/><rect class="fill" x="12" y="3.5" width="3.5" height="11" rx="1" fill="currentColor" opacity=".45"/></svg></button>
+  </header>
+  <nav class="nav" id="nav" aria-label="Steps">
+    <div class="nav-in">
+      <div><div class="eyebrow">Steps</div><div class="steps" id="steps"></div></div>
+      <div class="outline" id="outline-wrap"><div class="eyebrow" id="outline-title">Outline</div><ul class="tree" id="outline"></ul></div>
+    </div>
+  </nav>
+  <main class="main">
+    <div class="bar"><div class="tabs" id="tabs" role="tablist"></div><div class="crumbs" id="crumbs" aria-label="Level"></div></div>
+    <div class="stage" id="stage">
+      <svg id="svg" aria-label="Diagram"><g id="vp"><g id="content"></g><g id="overlay" pointer-events="none"></g></g></svg>
+      <div class="emptymsg" id="emptymsg" hidden></div>
+      <div class="hint" id="hint"></div>
+      <div class="zoombar">
+        <button id="zout" title="Zoom out (−)" aria-label="Zoom out">−</button>
+        <button id="zpct" title="Actual size" aria-label="Actual size">100%</button>
+        <button id="zin" title="Zoom in (+)" aria-label="Zoom in">+</button>
+        <button id="zfit" title="Fit to screen (Shift+1)">Fit</button>
+      </div>
+    </div>
+    <div class="page" id="page" hidden></div>
+  </main>
+  <aside class="side" id="side" aria-label="Details"><div class="side-in" id="side-in"></div></aside>
+</div>
+
+<script type="application/json" id="data">/*DATA*/null</script>
+<script src="https://cdn.jsdelivr.net/npm/roughjs@4.6.6/bundled/rough.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/elkjs@0.9.3/lib/elk.bundled.js"></script>
+<script>
+(() => {
+  "use strict";
+  const D = JSON.parse(document.getElementById("data").textContent);
+  const m = D.model, NS = "http://www.w3.org/2000/svg", FONT = 18, LABEL_FONT = 16;
+  const $ = id => document.getElementById(id);
+  const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const touch = matchMedia("(pointer: coarse)").matches;
+
+  const STEPS = {
+    1: { q: "Who uses it, and what must it do?", check: "Check the outside systems, the items they swap, and the requirements. Each requirement should be one clear sentence you could test." },
+    2: { q: "What does it do, step by step?", check: "Check that the jobs cover everything the app must do, with no overlaps and no gaps." },
+    3: { q: "What is it made of?", check: "Check that the parts cover the whole app, with no overlaps." },
+    4: { q: "Which part does each job?", check: "Each job should sit in exactly one part, and every part should have at least one job." },
+    5: { q: "How do the parts connect?", check: "Every item that moves between two parts needs a connection that carries it." },
+    6: { q: "How will we prove it works?", check: "Every input/output and system-wide requirement needs a test that proves it." },
+  };
+  const SEV = { error: "Must fix", warning: "Worth a look", advice: "Idea" };
+  const KIND = { system: ["The system", ""], function: ["Job", "function"], component: ["Part", "component"],
+    external: ["Outside system", "external system"], enabling: ["Helper system", "enabling system"],
+    context: ["Outside influence", "context"], item: ["Item", "item"], requirement: ["Requirement", ""],
+    interface: ["Connection", "interface"], objective: ["Objective", ""], test: ["Test", ""],
+    scenario: ["Scenario", "operational scenario"], source: ["Source", ""], stakeholder: ["Stakeholder", ""] };
+
+  // ---------------- model index ----------------
+  const list = k => (D.drawable && Array.isArray(m[k]) ? m[k] : []);
+  const byId = {};
+  if (D.drawable) {
+    byId[m.system.id] = { kind: "system", el: m.system };
+    for (const [k, kind] of [["external", "external"], ["items", "item"], ["functions", "function"], ["components", "component"],
+                             ["objectives", "objective"], ["requirements", "requirement"], ["tests", "test"], ["interfaces", "interface"],
+                             ["scenarios", "scenario"], ["sources", "source"], ["stakeholders", "stakeholder"]])
+      for (const e of list(k)) byId[e.id] ??= { kind, el: e };
+  }
+  const SID = D.drawable ? m.system.id : "";
+  const el = id => byId[id]?.el;
+  const kindOf = id => byId[id]?.kind;
+  const name = id => { const e = el(id); return (e && (e.name || e.title || e.text)) || id; };
+  const kidsMap = (els, parentOf) => { const k = {}; for (const e of els) (k[parentOf(e)] ??= []).push(e.id); return id => k[id] || []; };
+  const fkids = kidsMap(list("functions"), f => f.parent || SID);
+  const ckids = kidsMap(list("components"), c => c.parent);
+  const okids = kidsMap(list("objectives"), o => o.parent || "");
+  const leafFuncs = list("functions").filter(f => !fkids(f.id).length);
+  const fpar = id => kindOf(id) === "function" ? (el(id).parent || SID) : undefined;
+  const cpar = id => kindOf(id) === "component" ? el(id).parent : undefined;
+  const runsIn = id => el(id)?.runs_in;
+  const placedIn = id => kindOf(runsIn(id)) === "component" ? runsIn(id) : SID;
+  const chainBy = up => id => { const out = [], seen = new Set(); for (let x = id; x && !seen.has(x); x = up(x)) { seen.add(x); out.push(x); } return out; };
+  const subtree = (id, kids) => { const out = [], seen = new Set(), walk = x => { if (seen.has(x)) return; seen.add(x); out.push(x); kids(x).forEach(walk); }; walk(id); return out; };
+  const reqsOn = id => list("requirements").filter(r => (r.specifies || []).includes(id)).map(r => r.id);
+  const testsOf = id => list("tests").filter(t => t.verifies.includes(id)).map(t => t.id);
+  const ifacesOf = id => list("interfaces").filter(i => i.between.includes(id)).map(i => i.id);
+  const reqParents = new Set(list("requirements").map(r => r.parent));
+  const leafReqs = list("requirements").filter(r => !reqParents.has(r.id));
+  const itemFlows = (() => {     // [producer, consumer, item] between leaf jobs and outside systems
+    const out = [];
+    for (const it of list("items")) {
+      const prod = leafFuncs.filter(f => (f.outputs || []).includes(it.id)).map(f => f.id)
+        .concat(list("external").filter(e => (e.sends || []).includes(it.id)).map(e => e.id));
+      const cons = leafFuncs.filter(f => (f.inputs || []).includes(it.id)).map(f => f.id)
+        .concat(list("external").filter(e => (e.receives || []).includes(it.id)).map(e => e.id));
+      for (const a of prod) for (const b of cons) if (a !== b) out.push([a, b, it.id]);
+    }
+    return out;
+  })();
+
+  // ---------------- problems ----------------
+  const probsOf = {};
+  for (const f of D.findings) (probsOf[f.element] ??= []).push(f);
+  const badge = id => (probsOf[id] || []).filter(f => f.severity !== "advice").length;
+  const stepCount = s => D.findings.filter(f => f.step === s && f.severity !== "advice").length;
+
+  // ---------------- measuring ----------------
+  const ctx = document.createElement("canvas").getContext("2d");
+  const fam = getComputedStyle(document.documentElement).getPropertyValue("--hand");
+  const textW = (t, size) => { ctx.font = `${size}px ${fam}`; return ctx.measureText(t).width; };
+  const wrap = (t, max = 24) => {
+    const lines = [""];
+    for (const w of String(t).split(/\s+/)) {
+      const cur = lines.at(-1);
+      if (cur && (cur + " " + w).length > max && lines.length < 3) lines.push(w); else lines[lines.length - 1] = cur ? cur + " " + w : w;
+    }
+    return lines;
+  };
+  const leaf = (id, kind, extra = {}) => {
+    const lines = extra.lines || wrap(name(id)), hint = extra.hint ? 18 : 0;
+    return { id, kind, ...extra, lines,
+      width: Math.max(110, ...lines.map(l => textW(l, FONT) + 36), extra.hint ? textW(extra.hint, 14) + 28 : 0),
+      height: 26 + lines.length * 21 + hint };
+  };
+  const PAD = "[top=40,left=18,bottom=18,right=18]";
+  const edgeLabel = (what, undirected) => {
+    const names = what.map(name), two = names.join(", ");
+    if (names.length === 1) return names[0];
+    if (names.length === 2 && two.length <= 26) return two;
+    return `${names.length} ${undirected ? "connections" : "items"}`;
+  };
+
+  // ---------------- graphs ----------------
+  // One level of a hierarchy: the focus box with its children inside. Children with children stay closed.
+  function zoomGraph(z, focus) {
+    const vis = {};
+    const closeAll = (id, to) => { vis[id] = to; z.kids(id).forEach(k => closeAll(k, to)); (z.inner?.(id) || []).forEach(x => vis[x] = to); };
+    const innerNodes = id => (z.inner?.(id) || []).map(x => { vis[x] = x; return leaf(x, z.innerKind); });
+    const hint = n => `${n} inside · ${touch ? "double-tap" : "double-click"}`;
+    const node = id => {
+      const sub = z.kids(id);
+      if (sub.length) { closeAll(id, id); return leaf(id, z.kind(id), { closed: true, hint: hint(sub.length) }); }
+      vis[id] = id;
+      const inn = innerNodes(id);
+      return inn.length ? { id, kind: z.kind(id), lines: [name(id)], children: inn, layoutOptions: { "elk.padding": PAD } } : leaf(id, z.kind(id));
+    };
+    vis[focus] = focus;
+    const inside = z.kids(focus).map(node).concat(innerNodes(focus));
+    const nodes = [{ id: focus, kind: z.kind(focus), lines: [name(focus)], children: inside, layoutOptions: { "elk.padding": PAD } }];
+    const fchain = chainBy(z.up)(focus);
+    const rep = x => vis[x] || chainBy(z.up)(x).reverse().find(y => !fchain.includes(y));
+    const drawn = new Set(Object.values(vis));
+    const edges = [];
+    for (const [a, b, what] of z.links) {
+      const s = rep(a), t = rep(b);
+      if (!s || !t || s === t) continue;
+      for (const x of [s, t]) if (!drawn.has(x)) {
+        drawn.add(x);
+        nodes.push(leaf(x, kindOf(x) === "external" ? (el(x).kind === "external" ? "external" : "enabling") : "outside", { outside: kindOf(x) !== "external" }));
+      }
+      const same = edges.find(e => (e.source === s && e.target === t) || (z.undirected && e.source === t && e.target === s));
+      if (same) { if (!same.what.includes(what)) same.what.push(what); }
+      else edges.push({ source: s, target: t, what: [what], plain: z.undirected });
+    }
+    edges.forEach(e => { e.label = edgeLabel(e.what, z.undirected); e.key = e.source + ">" + e.target; });
+    return { nodes, edges, vis };
+  }
+  function contextGraph() {
+    const nodes = [leaf(SID, "system")], edges = [];
+    for (const e of list("external")) {
+      nodes.push(leaf(e.id, e.kind === "external" ? "external" : "enabling"));
+      const add = (s, t, what) => edges.push({ source: s, target: t, what, label: what.length ? edgeLabel(what) : "", dashed: !what.length, key: s + ">" + t });
+      if ((e.sends || []).length) add(e.id, SID, e.sends);
+      if ((e.receives || []).length) add(SID, e.id, e.receives);
+      if (!(e.sends || []).length && !(e.receives || []).length) add(e.id, SID, []);
+    }
+    return { nodes, edges, vis: Object.fromEntries(nodes.map(n => [n.id, n.id])) };
+  }
+  function objectivesGraph() {
+    const nodes = list("objectives").map(o => leaf(o.id, "objective",
+      o.weight != null ? { lines: [...wrap(name(o.id)), `weight ${Math.round(o.weight * 100)}%`] } : {}));
+    const edges = list("objectives").filter(o => o.parent && byId[o.parent]).map(o => ({ source: o.parent, target: o.id, what: [], plain: true, key: o.parent + ">" + o.id }));
+    return { nodes, edges, vis: Object.fromEntries(nodes.map(n => [n.id, n.id])) };
+  }
+
+  // ---------------- views ----------------
+  const tree = (id, kids) => { const seen = new Set(), walk = x => (seen.add(x), { id: x, kids: kids(x).filter(k => !seen.has(k)).map(walk) }); return walk(id); };
+  const matchInner = id => leafFuncs.filter(f => id === SID ? placedIn(f.id) === SID : f.runs_in === id).map(f => f.id);
+  const compKind = id => id === SID ? "system" : "component";
+  const VIEWS = {
+    context: { step: 1, label: "Who talks to it", type: "diagram", has: () => D.drawable, build: contextGraph,
+      locate: id => ["system", "external"].includes(kindOf(id)) || kindOf(id) === "item" ? true : null,
+      outline: () => [{ id: SID, kids: list("external").map(e => ({ id: e.id, kids: [] })) }] },
+    objectives: { step: 1, label: "Objectives", type: "diagram", dir: "DOWN", has: () => list("objectives").length > 0, build: objectivesGraph,
+      locate: id => kindOf(id) === "objective" ? true : null,
+      outline: () => list("objectives").filter(o => !o.parent || !byId[o.parent]).map(o => tree(o.id, okids)) },
+    requirements: { step: 1, label: "Requirements", type: "requirements", has: () => list("requirements").length > 0,
+      locate: id => kindOf(id) === "requirement" ? true : null },
+    scenarios: { step: 1, label: "Scenarios", type: "scenarios", has: () => list("scenarios").length > 0,
+      locate: id => kindOf(id) === "scenario" ? true : null },
+    functions: { step: 2, label: "Jobs", type: "zoom", empty: "No jobs yet. Add functions to the model to see them here.",
+      has: () => list("functions").length > 0, start: () => fkids(SID).length === 1 ? fkids(SID)[0] : SID,
+      z: { kids: fkids, up: fpar, kind: id => id === SID ? "system" : "function", links: itemFlows },
+      locate: id => kindOf(id) === "function" ? fpar(id) : kindOf(id) === "item" ? true : null,
+      outline: () => [tree(SID, fkids)] },
+    parts: { step: 3, label: "Parts", type: "zoom", empty: "No parts yet. Add components to the model to see them here.",
+      has: () => list("components").length > 0, start: () => SID,
+      z: { kids: ckids, up: cpar, kind: compKind, links: [] },
+      locate: id => kindOf(id) === "component" ? cpar(id) : null,
+      outline: () => [tree(SID, ckids)] },
+    match: { step: 4, label: "Jobs in parts", type: "zoom", empty: "No parts or jobs yet.",
+      has: () => list("components").length > 0 || leafFuncs.length > 0, start: () => SID,
+      z: { kids: ckids, kind: compKind, innerKind: "function", inner: matchInner, links: itemFlows,
+           up: id => kindOf(id) === "function" ? placedIn(id) : cpar(id) },
+      locate: id => kindOf(id) === "function" ? (placedIn(id) === SID ? SID : cpar(placedIn(id))) : kindOf(id) === "component" ? cpar(id) : kindOf(id) === "item" ? true : null,
+      outline: () => [tree(SID, id => kindOf(id) === "function" ? [] : ckids(id).concat(matchInner(id)))] },
+    connections: { step: 5, label: "Connections", type: "zoom", empty: "No connections yet. Add interfaces to the model to see them here.",
+      has: () => list("interfaces").length > 0, start: () => SID,
+      z: { kids: ckids, up: cpar, kind: compKind, undirected: true, links: list("interfaces").map(i => [i.between[0], i.between[1], i.id]) },
+      locate: id => kindOf(id) === "component" ? cpar(id) : ["interface", "external"].includes(kindOf(id)) ? true : null,
+      outline: () => [tree(SID, ckids)] },
+    tests: { step: 6, label: "Test plan", type: "tests", has: () => leafReqs.length > 0,
+      locate: id => ["requirement", "test"].includes(kindOf(id)) ? true : null },
+  };
+  const viewsOf = s => Object.keys(VIEWS).filter(k => VIEWS[k].step === s && VIEWS[k].has());
+  const upOf = v => VIEWS[v].z?.up || (() => undefined);
+
+  // ---------------- state + address bar ----------------
+  const S = { step: 1, view: "context", focus: {}, sel: null, lastView: {} };
+  const focusOf = v => S.focus[v] ?? VIEWS[v].start?.();
+  function readHash() {
+    const p = new URLSearchParams(location.hash.slice(1));
+    const s = Math.min(Math.max(+p.get("s") || 1, 1), D.step);
+    const views = viewsOf(s);
+    S.step = s;
+    S.view = views.includes(p.get("v")) ? p.get("v") : views[0] || null;
+    const f = p.get("f");
+    if (S.view && VIEWS[S.view].z && f && (f === SID || byId[f])) S.focus[S.view] = f;
+    S.sel = p.get("sel") && (byId[p.get("sel")] || p.get("sel").startsWith("edge:")) ? p.get("sel") : null;
+  }
+  function commit(push) {
+    const p = new URLSearchParams({ s: S.step });
+    if (S.view) p.set("v", S.view);
+    if (S.view && VIEWS[S.view].z) p.set("f", focusOf(S.view));
+    if (S.sel) p.set("sel", S.sel);
+    const hash = "#" + p.toString();
+    if (hash !== location.hash) history[push ? "pushState" : "replaceState"](null, "", hash);
+    render();
+  }
+  addEventListener("popstate", () => { readHash(); render(); });
+
+  // ---------------- actions ----------------
+  const select = id => { S.sel = id; commit(false); };
+  function goStep(s) {
+    if (s === S.step) return;
+    S.lastView[S.step] = S.view;
+    S.step = s; S.sel = null; const views = viewsOf(s);
+    S.view = views.includes(S.lastView[s]) ? S.lastView[s] : views[0] || null;
+    commit(true);
+  }
+  function goView(v) { if (v !== S.view) { S.view = v; commit(true); } }
+  // Show an element: stay in this view if it can show it, else try the step's other views.
+  function goTo(id) {
+    let f = S.view ? VIEWS[S.view].locate(id) : null;
+    if (f == null) {
+      const alt = viewsOf(S.step).find(k => VIEWS[k].locate(id) != null);
+      if (alt) { S.view = alt; f = VIEWS[alt].locate(id); }
+    }
+    if (typeof f === "string") S.focus[S.view] = f;
+    S.sel = id; commit(true);
+  }
+  async function openBox(id) {
+    const g = cur.geo[id];
+    if (g && !reduced) {                          // zoom toward the box, then swap in its inside
+      const r = stage.getBoundingClientRect(), k = Math.min(r.width / g.w, r.height / g.h) * .9;
+      vp.classList.add("anim"); content.style.opacity = 0;
+      T.k = k; T.x = r.width / 2 - (g.x + g.w / 2) * k; T.y = r.height / 2 - (g.y + g.h / 2) * k; applyT();
+      await new Promise(res => setTimeout(res, 200));
+      vp.classList.remove("anim");
+    }
+    S.focus[S.view] = id; S.sel = null; commit(true);
+  }
+  function goUp() {
+    const v = S.view, f = focusOf(v), up = upOf(v)(f);
+    if (!up) return;
+    S.focus[v] = up; S.sel = f; commit(true);      // select where we came from
+  }
+  function activate(id) {                           // double-click / double-tap / Enter on a selected box
+    const n = cur.nodes[id];
+    if (n?.closed) openBox(id);
+    else if (n?.outside) goTo(id);
+  }
+
+  // ---------------- small DOM helper ----------------
+  const h = (tag, props = {}, ...kids) => {
+    const e = document.createElement(tag);
+    for (const [k, v] of Object.entries(props)) {
+      if (v == null || v === false) continue;
+      if (k === "class") e.className = v; else if (k.startsWith("on")) e[k] = v; else e.setAttribute(k, v === true ? "" : v);
+    }
+    e.append(...kids.flat(Infinity).filter(k => k != null && k !== false));
+    return e;
+  };
+  const s = (tag, attrs = {}) => { const e = document.createElementNS(NS, tag); for (const [k, v] of Object.entries(attrs)) if (v != null) e.setAttribute(k, v); return e; };
+  const shortName = id => kindOf(id) === "requirement" ? `${id} · ${name(id).slice(0, 40)}${name(id).length > 40 ? "…" : ""}` : name(id);
+  const link = id => byId[id] ? h("button", { class: "link", title: id, onclick: () => goTo(id) }, shortName(id)) : h("span", {}, id);
+  const kindWords = id => { const k = kindOf(id) === "external" ? el(id).kind : kindOf(id); return KIND[k] || [k, ""]; };
+
+  // ---------------- side panels: buttons in the top bar, [ and ] on the keyboard, remembered per browser ----------------
+  const app = document.querySelector(".app");
+  const PANELS = { left: { btn: $("tleft"), el: $("nav"), name: "steps", key: "[" }, right: { btn: $("tright"), el: $("side"), name: "details", key: "]" } };
+  let panelPrefs = {};
+  try { panelPrefs = JSON.parse(localStorage.getItem("sysmodel.panels")) || {}; } catch (e) {}
+  function setPanel(which, open, remember) {
+    const p = PANELS[which];
+    app.dataset[which] = open ? "open" : "closed";
+    p.btn.setAttribute("aria-expanded", String(open));
+    p.btn.title = `${open ? "Hide" : "Show"} ${p.name} (${p.key})`;
+    if (!open && p.el.contains(document.activeElement)) p.btn.focus();   // never leave focus inside a hidden panel
+    if (remember) { panelPrefs[which] = open; try { localStorage.setItem("sysmodel.panels", JSON.stringify(panelPrefs)); } catch (e) {} }
+  }
+  const togglePanel = which => setPanel(which, app.dataset[which] === "closed", true);
+  PANELS.left.btn.onclick = () => togglePanel("left");
+  PANELS.right.btn.onclick = () => togglePanel("right");
+  $("stepnow").onclick = () => setPanel("left", true, true);
+  setPanel("left", panelPrefs.left !== false);
+  setPanel("right", panelPrefs.right !== false);
+  setTimeout(() => app.classList.remove("still"), 50);   // no slide on first load
+
+  // ---------------- review: approve or send back each step (saving needs `sysmodel serve`) ----------------
+  // Unsent notes and ticks live in sessionStorage, so a live reload or a step switch doesn't lose them.
+  const DRAFTS = "sysmodel.drafts:" + (D.drawable ? m.system.id : "");
+  let drafts = {}, saving = false, restore = null;
+  try { drafts = JSON.parse(sessionStorage.getItem(DRAFTS)) || {}; } catch (e) {}
+  try { restore = JSON.parse(sessionStorage.getItem("sysmodel.view")); sessionStorage.removeItem("sysmodel.view"); } catch (e) {}
+  const saveDrafts = () => { try { sessionStorage.setItem(DRAFTS, JSON.stringify(drafts)); } catch (e) {} };
+  const draft = n => (drafts[n] ??= { note: "", checked: [...(D.review[n]?.last?.checked || [])] });
+  const when = at => new Date(at).toLocaleString(undefined, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+  function reviewOf(n) {   // [step mark, short word, sentence]
+    const r = D.review[n], l = r?.last;
+    if (!l) return ["", "Not reviewed", "Nobody has reviewed this step yet."];
+    const who = `${l.by} on ${when(l.at)}`;
+    const broken = D.findings.some(f => f.step === n && f.severity === "error");
+    if (l.decision === "approved") return !r.current ? ["stale", "Changed", `Approved by ${who}, but what this step shows has changed since. Look again.`]
+      : broken ? ["stale", "Needs a fix", `Approved by ${who}, but a change elsewhere broke a rule here. Fix it first.`]
+      : ["ok", "Approved", `Approved by ${who}.`];
+    return ["back", "Sent back", r.current ? `Sent back by ${who}.` : `Sent back by ${who}. It has changed since, so it's ready for another look.`];
+  }
+  async function decide(n, decision) {
+    const dr = draft(n), say = t => { const p = $("review-msg"); if (p) p.textContent = t; };
+    if (decision === "sent back" && !dr.note.trim()) { say("Say what should change, then send it back."); $("review-note")?.focus(); return; }
+    say("Saving…"); saving = true;
+    try {
+      const res = await fetch("api/review", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ step: n, decision, note: dr.note, checked: dr.checked, fingerprint: D.review[n].fingerprint }) });
+      const out = await res.json();
+      if (out.reload) { dr.msg = out.error + " Here is the latest version."; saveDrafts(); return reload(); }
+      if (!res.ok) return say(out.error);
+      D.review = out.review; D.live.version = out.version;
+      drafts[n] = { note: "", checked: dr.checked }; saveDrafts();
+      renderSteps(); renderSide();
+      $("side-in").querySelector(decision === "approved" ? ".review .primary" : ".review .secondary")?.focus();
+      say(decision === "approved" ? "Saved: approved." : "Saved: sent back.");
+    } catch (e) { say("Can't reach sysmodel serve. Is it still running?"); }
+    finally { saving = false; }
+  }
+
+  // ---------------- top + left ----------------
+  function renderTop() {
+    $("sysname").textContent = D.drawable ? m.system.name : "Model";
+    $("purpose").textContent = D.drawable ? (m.system.purpose || "") : "";
+    const fix = D.findings.filter(f => f.severity === "error").length, look = D.findings.filter(f => f.severity === "warning").length;
+    $("status").replaceChildren(fix + look ? h("span", { class: "pill warn" }, `${fix} to fix · ${look} to look at`) : h("span", { class: "pill ok" }, "Checks pass"));
+  }
+  function renderSteps() {
+    $("stepnow").textContent = `Step ${S.step} · ${D.steps[S.step]}`;
+    $("steps").replaceChildren(...[1, 2, 3, 4, 5, 6].map(n => {
+      const later = n > D.step, c = later ? 0 : stepCount(n), [mark, word] = later ? [""] : reviewOf(n);
+      return h("button", { class: "step", disabled: later, "aria-current": n === S.step ? "step" : null, onclick: () => goStep(n),
+          title: later ? `Not checked yet. Run sysmodel with --step ${n}.` : null },
+        h("span", { class: `n ${mark}`, "aria-hidden": "true" }, mark === "ok" ? "✓" : mark === "back" ? "↩" : n),
+        h("span", {}, h("b", {}, D.steps[n]), h("small", {}, STEPS[n].q), mark ? h("span", { class: "vh" }, ` (${word})`) : null),
+        later ? h("span", { class: "count later" }, "later") : c ? h("span", { class: "count", title: `${c} problems` }, c) : null);
+    }));
+  }
+  function renderOutline() {
+    const v = S.view && VIEWS[S.view], roots = v?.outline?.();
+    $("outline-wrap").hidden = !roots;
+    if (!roots) return;
+    $("outline-title").textContent = v.label;
+    const f = v.z ? focusOf(S.view) : null, path = v.z ? chainBy(v.z.up)(f) : [];
+    const swatch = id => ({ system: "--sys", function: "--func", component: "--comp", external: "--ext", objective: "--obj" })[kindOf(id)] || "--enab";
+    const item = n => h("li", {},
+      h("button", { class: path.includes(n.id) ? "here" : null, "aria-selected": S.sel === n.id ? "true" : null, onclick: () => goTo(n.id) },
+        h("span", { class: "sw", style: `background: var(${swatch(n.id)})` }), name(n.id), badge(n.id) ? h("span", { class: "dotw", title: "Has problems" }) : null),
+      n.kids.length ? h("ul", {}, n.kids.map(item)) : null);
+    $("outline").replaceChildren(...roots.map(item));
+  }
+
+  // ---------------- middle: tabs + crumbs ----------------
+  function renderBar() {
+    const views = viewsOf(S.step);
+    $("tabs").replaceChildren(...(views.length > 1 ? views.map(k =>
+      h("button", { role: "tab", "aria-selected": k === S.view ? "true" : "false", onclick: () => goView(k) }, VIEWS[k].label)) : []));
+    const v = S.view && VIEWS[S.view];
+    $("crumbs").replaceChildren();
+    if (v?.z) {
+      const chain = chainBy(v.z.up)(focusOf(S.view)).reverse();
+      chain.forEach((id, i) => {
+        if (i) $("crumbs").append("›");
+        $("crumbs").append(i === chain.length - 1 ? h("button", { "aria-current": "true" }, name(id))
+          : h("button", { onclick: () => { S.focus[S.view] = id; S.sel = chain[i + 1]; commit(true); } }, name(id)));
+      });
+    } else if (v && views.length <= 1) $("crumbs").append(v.label);
+  }
+
+  // ---------------- the canvas ----------------
+  const stage = $("stage"), svg = $("svg"), vp = $("vp"), content = $("content"), overlay = $("overlay");
+  const T = { x: 0, y: 0, k: 1, touched: false };
+  let cur = { key: null, geo: {}, nodes: {}, edges: [], vis: {}, w: 0, h: 0 };
+  const applyT = () => {
+    vp.style.transform = `translate(${T.x}px, ${T.y}px) scale(${T.k})`;
+    stage.style.backgroundPosition = `${T.x}px ${T.y}px`;
+    stage.style.backgroundSize = `${22 * T.k}px ${22 * T.k}px`;
+    $("zpct").textContent = Math.round(T.k * 100) + "%";
+  };
+  const clampK = k => Math.min(3, Math.max(.2, k));
+  function fit() {
+    const r = stage.getBoundingClientRect();
+    if (!cur.w || !r.width) return;
+    T.k = clampK(Math.min((r.width - 48) / cur.w, (r.height - 48) / cur.h, 1.25));
+    T.x = (r.width - cur.w * T.k) / 2; T.y = (r.height - cur.h * T.k) / 2; T.touched = false; applyT();
+  }
+  function zoomAt(cx, cy, f) {
+    const k = clampK(T.k * f);
+    T.x = cx - (cx - T.x) * (k / T.k); T.y = cy - (cy - T.y) * (k / T.k); T.k = k; T.touched = true; applyT();
+  }
+  const zoomCenter = f => { const r = stage.getBoundingClientRect(); zoomAt(r.width / 2, r.height / 2, f); };
+  $("zin").onclick = () => zoomCenter(1.25);
+  $("zout").onclick = () => zoomCenter(.8);
+  $("zfit").onclick = fit;
+  function zoomToSel() {
+    const g = cur.geo[S.sel] || cur.geo[cur.vis[S.sel]], r = stage.getBoundingClientRect();
+    if (!g || !r.width) return;
+    T.k = clampK(Math.min((r.width - 96) / g.w, (r.height - 96) / g.h, 2));
+    T.x = r.width / 2 - (g.x + g.w / 2) * T.k; T.y = r.height / 2 - (g.y + g.h / 2) * T.k; T.touched = true; applyT();
+  }
+  $("zpct").onclick = () => zoomCenter(1 / T.k);
+  let lastSize = null;                            // panels opening or closing: refit, or keep the same spot in the middle
+  new ResizeObserver(() => {
+    const r = stage.getBoundingClientRect();
+    if (!T.touched) fit();
+    else if (lastSize) { T.x += (r.width - lastSize.w) / 2; T.y += (r.height - lastSize.h) / 2; applyT(); }
+    lastSize = { w: r.width, h: r.height };
+  }).observe(stage);
+
+  // wheel pans, ctrl/cmd + wheel (and trackpad pinch) zooms, like Excalidraw and tldraw
+  svg.addEventListener("wheel", e => {
+    e.preventDefault();
+    const r = stage.getBoundingClientRect();
+    if (e.ctrlKey || e.metaKey) zoomAt(e.clientX - r.left, e.clientY - r.top, Math.exp(-e.deltaY * .01));
+    else { T.x -= e.shiftKey && !e.deltaX ? e.deltaY : e.deltaX; T.y -= e.shiftKey && !e.deltaX ? 0 : e.deltaY; T.touched = true; applyT(); }
+  }, { passive: false });
+
+  // drag to pan, two fingers to pinch; a press that does not move is a click
+  const ptrs = new Map(); let drag = null;
+  svg.addEventListener("pointerdown", e => {
+    ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (ptrs.size === 1) drag = { x: e.clientX, y: e.clientY, tx: T.x, ty: T.y, moved: false, id: e.pointerId };
+    else drag = { pinch: true, moved: true };
+  });
+  addEventListener("pointermove", e => {
+    if (!ptrs.has(e.pointerId) || !drag) return;
+    const prev = ptrs.get(e.pointerId);
+    ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (drag.pinch && ptrs.size === 2) {
+      const [a, b] = [...ptrs.values()], other = [...ptrs.entries()].find(([k]) => k !== e.pointerId)[1];
+      const r = stage.getBoundingClientRect();
+      const d0 = Math.hypot(prev.x - other.x, prev.y - other.y), d1 = Math.hypot(a.x - b.x, a.y - b.y);
+      if (d0 > 0) zoomAt((a.x + b.x) / 2 - r.left, (a.y + b.y) / 2 - r.top, d1 / d0);
+      return;
+    }
+    if (!drag.moved && Math.hypot(e.clientX - drag.x, e.clientY - drag.y) < 4) return;
+    if (!drag.moved) { drag.moved = true; svg.classList.add("panning"); svg.setPointerCapture?.(e.pointerId); }
+    T.x = drag.tx + e.clientX - drag.x; T.y = drag.ty + e.clientY - drag.y; T.touched = true; applyT();
+  });
+  const endPtr = e => { ptrs.delete(e.pointerId); if (!ptrs.size) { svg.classList.remove("panning"); setTimeout(() => { if (!ptrs.size) drag = null; }); } };
+  addEventListener("pointerup", endPtr); addEventListener("pointercancel", endPtr);
+
+  let lastTap = { id: null, t: 0 };
+  svg.addEventListener("click", e => {
+    if (drag?.moved) return;
+    const n = e.target.closest(".node"), ed = e.target.closest(".edge");
+    if (n) {
+      const id = n.dataset.id, now = performance.now();
+      if (e.detail === 2 || (lastTap.id === id && now - lastTap.t < 400)) { lastTap = { id: null, t: 0 }; activate(id); return; }
+      lastTap = { id, t: now };
+      if (S.sel !== id) select(id);
+    } else if (ed && cur.edges.find(x => x.key === ed.dataset.key)?.what.length) select("edge:" + ed.dataset.key);
+    else if (S.sel) select(null);
+  });
+  svg.addEventListener("keydown", e => {
+    const n = e.target.closest?.(".node");
+    if (!n || (e.key !== "Enter" && e.key !== " ")) return;
+    e.preventDefault();
+    if (S.sel === n.dataset.id) activate(n.dataset.id); else select(n.dataset.id);
+  });
+  addEventListener("keydown", e => {
+    if (e.target.closest?.("input, textarea, select") || e.metaKey || e.ctrlKey || e.altKey) return;
+    const diagram = S.view && VIEWS[S.view].type !== "requirements" && VIEWS[S.view].type !== "tests" && VIEWS[S.view].type !== "scenarios";
+    if (e.key === "[") togglePanel("left");
+    else if (e.key === "]") togglePanel("right");
+    else if (e.key === "Escape" && S.sel) select(null);
+    else if (!diagram) return;
+    else if (e.key === "Backspace") { e.preventDefault(); goUp(); }
+    else if (e.key === "+" || e.key === "=") zoomCenter(1.25);
+    else if (e.key === "-") zoomCenter(.8);
+    else if (e.shiftKey && e.code === "Digit1") fit();
+    else if (e.shiftKey && e.code === "Digit2") zoomToSel();
+  });
+
+  // ---------------- layout + drawing ----------------
+  const elk = new ELK();
+  async function layout(g, dir) {
+    const toElk = n => n.children
+      ? { id: n.id, layoutOptions: n.layoutOptions, children: n.children.map(toElk) }
+      : { id: n.id, width: n.width, height: n.height };
+    const out = await elk.layout({
+      id: "root",
+      layoutOptions: { "elk.algorithm": "layered", "elk.direction": dir || "RIGHT", "elk.hierarchyHandling": "INCLUDE_CHILDREN",
+                       "elk.edgeLabels.placement": "CENTER", "elk.spacing.nodeNode": "36",
+                       "elk.layered.spacing.nodeNodeBetweenLayers": "48", "elk.spacing.edgeLabel": "6",
+                       "elk.layered.nodePlacement.strategy": "NETWORK_SIMPLEX", "elk.padding": "[top=24,left=24,bottom=24,right=24]" },
+      children: g.nodes.map(toElk),
+      edges: g.edges.map((e, i) => ({ id: "e" + i, sources: [e.source], targets: [e.target],
+        labels: e.label ? [{ text: e.label, width: textW(e.label, LABEL_FONT) + 14, height: 24 }] : [] })),
+    });
+    const abs = { root: { x: 0, y: 0 } }, placed = {};
+    const walk = (n, ox, oy) => (n.children || []).forEach(c => { abs[c.id] = { x: ox + c.x, y: oy + c.y }; placed[c.id] = c; walk(c, ox + c.x, oy + c.y); });
+    walk(out, 0, 0);
+    return { out, abs, placed };
+  }
+  const tok = n => getComputedStyle(document.documentElement).getPropertyValue("--" + n).trim();
+  const seedOf = str => [...str].reduce((a, c) => (a * 31 + c.charCodeAt(0)) >>> 0, 7) % 2 ** 31 || 1;
+  const roundRect = (x, y, w, hh, r) =>
+    `M${x + r},${y} H${x + w - r} Q${x + w},${y} ${x + w},${y + r} V${y + hh - r} Q${x + w},${y + hh} ${x + w - r},${y + hh}` +
+    ` H${x + r} Q${x},${y + hh} ${x},${y + hh - r} V${y + r} Q${x},${y} ${x + r},${y} Z`;
+  function text(parent, str, x, y, { size = FONT, anchor = "middle", color = tok("ink") } = {}) {
+    const t = s("text", { x, y, "text-anchor": anchor, "dominant-baseline": "middle", fill: color, "font-family": fam, "font-size": size });
+    t.textContent = str; parent.appendChild(t); return t;
+  }
+
+  async function drawGraph(g, dir) {
+    const { out, abs, placed } = await layout(g, dir);
+    const rc = rough.svg(svg), ink = tok("ink"), warn = tok("warn");
+    const fills = { system: tok("sys"), component: tok("comp"), function: tok("func"), external: tok("ext"),
+                    enabling: tok("enab"), outside: tok("enab"), objective: tok("obj") };
+    const geo = {}, nodes = {}, frag = document.createDocumentFragment();
+    const all = [], flat = n => { all.push(n); nodes[n.id] = n; (n.children || []).forEach(flat); };
+    g.nodes.forEach(flat);
+    for (const n of all) {
+      const p = placed[n.id], a = abs[n.id], seed = seedOf(n.id), isBox = !!(n.children && n.children.length);
+      geo[n.id] = { x: a.x, y: a.y, w: p.width, h: p.height };
+      const kw = kindWords(n.id)[0];
+      const gEl = s("g", { class: "node", "data-id": n.id, tabindex: 0, role: "button",
+        "aria-label": `${kw}: ${n.lines.join(" ")}${n.closed ? ", has parts inside" : ""}` });
+      gEl.append(s("rect", { x: a.x, y: a.y, width: p.width, height: p.height, rx: 10, fill: "transparent" }));
+      const dash = n.kind === "enabling" || n.kind === "outside" || n.closed;
+      const shape = rc.path(roundRect(a.x, a.y, p.width, p.height, n.kind === "function" && !isBox ? 22 : 10), {
+        seed, roughness: 1.1, bowing: 1.2, stroke: ink, strokeWidth: 1.4, fill: fills[n.kind] || tok("enab"),
+        fillStyle: isBox ? "hachure" : "solid", hachureGap: 10, fillWeight: 1, strokeLineDash: dash ? [7, 6] : undefined });
+      if (n.kind === "outside") shape.setAttribute("opacity", ".65");
+      gEl.append(shape);
+      if (isBox) text(gEl, n.lines[0], a.x + 16, a.y + 21, { anchor: "start", size: n.kind === "system" ? 21 : FONT });
+      else {
+        const top = a.y + p.height / 2 - ((n.lines.length - 1) * 21 + (n.hint ? 18 : 0)) / 2;
+        n.lines.forEach((l, i) => text(gEl, l, a.x + p.width / 2, top + i * 21));
+        if (n.hint) text(gEl, n.hint, a.x + p.width / 2, top + n.lines.length * 21 - 2, { size: 14, color: tok("muted") });
+      }
+      const c = n.closed ? Object.entries(g.vis).filter(([x, r]) => r === n.id).reduce((t, [x]) => t + badge(x), 0) : badge(n.id);
+      if (c) {                                  // soft count of problems on (or inside) this box
+        const w = Math.max(24, textW(String(c), 15) + 14), bx = a.x + p.width - w + 8, by = a.y - 10;
+        gEl.append(rc.path(roundRect(bx, by, w, 22, 11), { seed: seed + 5, roughness: .6, stroke: warn, strokeWidth: 1.4, fill: tok("warn-bg"), fillStyle: "solid" }));
+        text(gEl, String(c), bx + w / 2, by + 12, { size: 15 });
+      }
+      frag.append(gEl);
+    }
+    out.edges.forEach((e, i) => {
+      const o = abs[e.container] || { x: 0, y: 0 }, sec = e.sections?.[0], spec = g.edges[i];
+      if (!sec) return;
+      const pts = [sec.startPoint, ...(sec.bendPoints || []), sec.endPoint].map(q => [q.x + o.x, q.y + o.y]);
+      const gEl = s("g", { class: "edge", "data-key": spec.key });
+      gEl.append(s("polyline", { points: pts.map(q => q.join(",")).join(" "), fill: "none", stroke: "transparent", "stroke-width": 14 }));
+      const opts = { seed: seedOf(spec.key) + 3, roughness: .9, stroke: ink, strokeWidth: 1.3, strokeLineDash: spec.dashed ? [6, 6] : undefined };
+      gEl.append(rc.linearPath(pts, opts));
+      if (!spec.plain && !spec.dashed) {
+        const [x2, y2] = pts.at(-1), [x1, y1] = pts.at(-2), ang = Math.atan2(y2 - y1, x2 - x1);
+        for (const d of [0.5, -0.5]) gEl.append(rc.line(x2, y2, x2 - 12 * Math.cos(ang + d), y2 - 12 * Math.sin(ang + d), opts));
+      }
+      for (const l of e.labels || []) {
+        const lx = l.x + o.x, ly = l.y + o.y, bad = (spec.what || []).some(w => badge(w));
+        gEl.append(s("rect", { x: lx, y: ly, width: l.width, height: l.height, rx: 8, class: "lbl",
+          fill: bad ? tok("warn-bg") : tok("panel"), stroke: bad ? warn : "none", "stroke-dasharray": "4 3" }));
+        text(gEl, l.text, lx + l.width / 2, ly + l.height / 2 + 1, { size: LABEL_FONT, color: tok("muted") });
+      }
+      frag.append(gEl);
+    });
+    content.replaceChildren(frag);
+    return { geo, nodes, edges: g.edges, vis: g.vis, w: out.width, h: out.height };
+  }
+
+  // selection: a ring around the box, other arrows fade back
+  function showSelection() {
+    overlay.replaceChildren();
+    content.querySelectorAll(".edge").forEach(e => e.classList.remove("dim"));
+    const sel = S.sel;
+    if (!sel || !cur.key) return;
+    const rc = rough.svg(svg), accent = tok("accent");
+    const ring = (id, dashed) => {
+      const g = cur.geo[id]; if (!g) return;
+      overlay.append(rc.path(roundRect(g.x - 6, g.y - 6, g.w + 12, g.h + 12, 14),
+        { seed: 11, roughness: .8, stroke: accent, strokeWidth: 2.6, fill: "none", strokeLineDash: dashed ? [6, 5] : undefined }));
+    };
+    let keep = null;
+    if (sel.startsWith("edge:")) keep = e => e.key === sel.slice(5);
+    else if (cur.geo[sel]) {
+      ring(sel);
+      const under = new Set(); const walk = n => { under.add(n.id); (n.children || []).forEach(walk); }; walk(cur.nodes[sel]);
+      keep = e => under.has(e.source) || under.has(e.target);
+    } else if (cur.vis[sel] && cur.geo[cur.vis[sel]]) ring(cur.vis[sel], true);   // hidden inside a closed box
+    else if (cur.edges.some(e => (e.what || []).includes(sel))) keep = e => (e.what || []).includes(sel);
+    if (keep && cur.edges.some(keep))
+      content.querySelectorAll(".edge").forEach(g => { if (!keep(cur.edges.find(e => e.key === g.dataset.key))) g.classList.add("dim"); });
+  }
+
+  let drawSeq = 0;
+  async function renderDiagram(force) {
+    const v = VIEWS[S.view], focus = v.z ? focusOf(S.view) : "";
+    const key = S.view + "|" + focus;
+    if (key !== cur.key || force) {
+      const seq = ++drawSeq;
+      const g = v.z ? zoomGraph(v.z, focus) : v.build();
+      content.style.opacity = 0;
+      const drawn = await drawGraph(g, v.dir);
+      if (seq !== drawSeq) return;
+      const keepView = force && key === cur.key;
+      cur = { key, ...drawn };
+      if (restore?.T && restore.key === key) { Object.assign(T, restore.T); applyT(); }
+      else if (!keepView) fit();
+      content.getBoundingClientRect(); content.style.opacity = 1;   // flush, then fade in
+    }
+    showSelection();
+  }
+
+  // ---------------- tables and lists ----------------
+  let pageKey = null;
+  function renderPage() {
+    const v = VIEWS[S.view], page = $("page");
+    if (pageKey !== S.view) {
+      pageKey = S.view;
+      page.replaceChildren(v.type === "requirements" ? reqTable() : v.type === "tests" ? testTable() : scenarioList());
+      page.scrollTop = 0;
+    }
+    page.querySelectorAll("tr[data-id]").forEach(r => r.setAttribute("aria-selected", r.dataset.id === S.sel ? "true" : "false"));
+    page.querySelector(`tr[data-id="${CSS.escape(S.sel || "")}"]`)?.scrollIntoView({ block: "nearest" });
+  }
+  function filterable(rows, placeholder, toggleLabel, toggleTest) {
+    const q = h("input", { type: "search", id: "q-" + S.view, placeholder, "aria-label": placeholder });
+    const only = h("input", { type: "checkbox", id: "only-" + S.view });
+    const shown = h("span", { class: "muted small" });
+    const apply = () => {
+      const needle = q.value.trim().toLowerCase(); let n = 0;
+      for (const r of rows) {
+        if (!r.dataset.id) continue;
+        const hide = (needle && !r.textContent.toLowerCase().includes(needle)) || (only.checked && !toggleTest(r.dataset.id));
+        r.hidden = hide; if (!hide) n++;
+      }
+      shown.textContent = `${n} shown`;
+    };
+    q.oninput = apply; only.onchange = apply; apply();
+    return h("div", { class: "tools" }, q, h("label", {}, only, toggleLabel), shown);
+  }
+  const rowClick = e => { const r = e.target.closest("tr[data-id]"); if (r) select(r.dataset.id); };
+  function reqTable() {
+    const rows = list("requirements").map(r => reqParents.has(r.id)
+      ? h("tr", { class: "group" }, h("td", { colspan: 5 }, r.text))
+      : h("tr", { "data-id": r.id }, h("td", { class: "id" }, r.id), h("td", {}, r.text),
+          h("td", {}, [r.category, r.subcategory].filter(Boolean).join(" / ")), h("td", {}, r.stage || ""),
+          h("td", {}, badge(r.id) ? h("span", { class: "chip error" }, `${badge(r.id)} to fix`) : "")));
+    const tbody = h("tbody", { onclick: rowClick }, rows);
+    return h("div", {}, filterable(rows, "Search requirements", "Only ones with problems", id => badge(id) > 0),
+      h("table", {}, h("thead", {}, h("tr", {}, ["Id", "The system shall…", "Kind", "Stage", ""].map(t => h("th", {}, t)))), tbody));
+  }
+  const needsTest = r => ["io", "system-wide"].includes(r.category);
+  function testTable() {
+    const rows = leafReqs.map(r => {
+      const ts = testsOf(r.id);
+      const chip = ts.length ? h("span", { class: "chip ok" }, "Covered") : needsTest(r) ? h("span", { class: "chip error" }, "Needs a test") : h("span", { class: "chip advice" }, "Optional");
+      return h("tr", { "data-id": r.id }, h("td", { class: "id" }, r.id), h("td", {}, r.text), h("td", {}, chip),
+        h("td", {}, ts.map(t => `${name(t)} (${el(t).method})`).join("; ")));
+    });
+    const tbody = h("tbody", { onclick: rowClick }, rows);
+    return h("div", {}, filterable(rows, "Search requirements", "Only ones missing a test", id => !testsOf(id).length && needsTest(el(id))),
+      h("table", {}, h("thead", {}, h("tr", {}, ["Id", "Requirement", "Status", "Tests"].map(t => h("th", {}, t)))), tbody));
+  }
+  const scenarioList = () => h("div", { class: "scen" }, list("scenarios").map(sc =>
+    h("div", { class: "card" }, h("h3", {}, sc.name), h("ol", {}, sc.steps.map(t => h("li", {}, t))))));
+
+  // ---------------- right: details ----------------
+  const probCards = fs => h("div", { class: "probs" }, fs.map(f => h("button", { class: "prob", onclick: () => byId[f.element] && goTo(f.element) },
+    h("span", { class: `chip ${f.severity}` }, SEV[f.severity]), h("b", {}, byId[f.element] ? shortName(f.element) : f.element), ": ", f.message,
+    h("span", { class: "ref" }, `Rule ${f.rule}${f.page ? ` · book p.${f.page}` : ""}`))));
+  function summary() {
+    const st = STEPS[S.step], fs = D.findings.filter(f => f.step === S.step);
+    return [
+      h("div", {}, h("div", { class: "kindline" }, `Step ${S.step} of 6 · ${D.steps[S.step]}`), h("h2", {}, st.q)),
+      h("p", { class: "guide" }, st.check),
+      h("div", {}, h("h4", {}, fs.length ? `Things to look at (${fs.length})` : "Things to look at"),
+        fs.length ? probCards(fs) : h("p", { class: "clean" }, "Nothing found for this step.")),
+      reviewCard(),
+    ];
+  }
+  function reviewCard() {
+    if (!D.drawable) return null;
+    const n = S.step, js = D.judgment.filter(j => j.step === n), dr = draft(n), last = D.review[n]?.last;
+    const [mark, word, sentence] = reviewOf(n), errors = D.findings.filter(f => f.step === n && f.severity === "error").length;
+    const msg = h("p", { class: "small", id: "review-msg", role: "status" }, dr.msg || "");
+    if (dr.msg) { delete dr.msg; saveDrafts(); }
+    const tick = j => e => { dr.checked = e.target.checked ? [...dr.checked, j.rule] : dr.checked.filter(r => r !== j.rule); saveDrafts(); };
+    let note = null;
+    if (D.live) {
+      note = h("textarea", { id: "review-note", rows: 3, "aria-label": "Note",
+        placeholder: "Note for the team or the AI. To send back, say what should change.", oninput: e => { dr.note = e.target.value; saveDrafts(); } });
+      note.value = dr.note;
+    }
+    return h("section", { class: "review", "aria-label": `Review step ${n}` },
+      h("h4", {}, "Your review"),
+      h("p", { class: "revstate" }, h("span", { class: `chip ${{ ok: "ok", stale: "warning", back: "error" }[mark] || "none"}` }, word), sentence),
+      last?.note ? h("p", { class: "revnote" }, last.note) : null,
+      js.length ? h("div", {}, h("p", { class: "small muted", style: "margin-bottom:8px" }, "Only a person can judge these:"),
+        h("ul", { class: "checks" }, js.map(j => h("li", {}, h("label", {},
+          h("input", { type: "checkbox", checked: dr.checked.includes(j.rule), onchange: tick(j) }),
+          h("span", {}, j.text, h("span", { class: "muted small" }, ` · ${j.rule}, book p.${j.page}`))))))) : null,
+      note,
+      D.live ? h("div", { class: "btnrow" },
+        h("button", { class: "primary", disabled: errors > 0, onclick: () => decide(n, "approved") }, `Approve step ${n}`),
+        h("button", { class: "secondary", onclick: () => decide(n, "sent back") }, "Send back")) : null,
+      D.live && errors ? h("p", { class: "small muted" }, `You can approve once the ${errors} must-fix problems above are fixed.`) : null,
+      D.live ? msg : h("p", { class: "small muted" }, "To approve or send back, open this model with ", h("code", {}, "sysmodel serve"), "."));
+  }
+  function facts(id) {
+    const k = kindOf(id), e = el(id), F = [];
+    const add = (label, v) => { if (v != null && v !== "" && !(Array.isArray(v) && !v.length)) F.push([label, v]); };
+    const links = ids => (ids || []).map(link);
+    if (k === "system") { add("Purpose", e.purpose); add("Main jobs", links(fkids(SID))); add("Main parts", links(ckids(SID)));
+      add("Outside systems", links(list("external").map(x => x.id))); add("Requirements", links(reqsOn(id))); }
+    if (k === "function") { add("Part of", e.parent ? link(e.parent) : null); add("Smaller jobs", links(fkids(id)));
+      add("Takes in", links(e.inputs)); add("Gives out", links(e.outputs)); add("Done when", e.done_when);
+      add("Runs in", e.runs_in ? link(e.runs_in) : null); add("Requirements", links(reqsOn(id))); }
+    if (k === "component") { add("Part of", link(e.parent)); add("Smaller parts", links(ckids(id)));
+      const jobs = leafFuncs.filter(f => subtree(id, ckids).includes(f.runs_in)).map(f => f.id);
+      add("Jobs", links(jobs)); add("Connections", links(ifacesOf(id))); add("Requirements", links(reqsOn(id))); }
+    if (k === "external") { add("Type", KIND[e.kind][0]); add("Sends", links(e.sends)); add("Receives", links(e.receives)); add("Connections", links(ifacesOf(id))); }
+    if (k === "item") {
+      add("Made by", links(itemFlows.filter(f => f[2] === id).map(f => f[0]).filter((x, i, a) => a.indexOf(x) === i)));
+      add("Used by", links(itemFlows.filter(f => f[2] === id).map(f => f[1]).filter((x, i, a) => a.indexOf(x) === i)));
+      add("Carried by", links(list("interfaces").filter(i => i.carries.includes(id)).map(i => i.id))); add("Requirements", links(reqsOn(id))); }
+    if (k === "interface") { add("Between", links(e.between)); add("Carries", links(e.carries)); }
+    if (k === "requirement") { add("Kind", [e.category, e.subcategory].filter(Boolean).join(" / ")); add("Stage", e.stage); add("Threshold", e.threshold);
+      add("Group", e.parent ? link(e.parent) : null); add("Comes from", links([e.source, ...(e.derived_from || [])].filter(Boolean)));
+      add("Applies to", links(e.specifies)); add("Objective", e.objective ? link(e.objective) : null); add("Proven by", links(testsOf(id)));
+      add("Belongs here", links(list("requirements").filter(r => r.parent === id).map(r => r.id))); }
+    if (k === "objective") { add("Part of", e.parent ? link(e.parent) : null); add("Weight", e.weight != null ? `${Math.round(e.weight * 100)}%` : null);
+      add("Smaller objectives", links(okids(id))); add("Requirements", links(list("requirements").filter(r => r.objective === id).map(r => r.id))); }
+    if (k === "test") { add("How", e.method === "automated" ? "Automated test" : "Manual check"); add("Proves", links(e.verifies)); }
+    if (k === "source") { add("Title", e.title); add("From", e.stakeholder ? link(e.stakeholder) : null); }
+    if (k === "scenario") add("Steps", h("ol", { style: "margin:0;padding-left:1.2em" }, e.steps.map(t => h("li", {}, t))));
+    return F;
+  }
+  function details(id) {
+    const [word, term] = kindWords(id), v = S.view && VIEWS[S.view];
+    const fs = probsOf[id] || [], F = facts(id);
+    const canOpen = v?.z && v.z.kids(id).length > 0;
+    return [
+      h("button", { class: "back", onclick: () => select(null) }, "← Step overview"),
+      h("div", {}, h("div", { class: "kindline" }, word, term ? ` · ${term}` : "", " ", h("code", {}, id)),
+        h("h2", { class: kindOf(id) === "requirement" ? "says" : null, style: kindOf(id) === "requirement" ? "font:1.05rem/1.45 var(--body)" : null }, name(id))),
+      canOpen ? h("button", { class: "primary", onclick: () => cur.geo[id] ? openBox(id) : (S.focus[S.view] = id, S.sel = null, commit(true)) }, "Look inside →") : null,
+      fs.length ? h("div", {}, h("h4", {}, "Problems here"), probCards(fs)) : null,
+      F.length ? h("dl", { class: "facts" }, F.map(([l, v]) => [h("dt", {}, l), h("dd", {}, v)])) : null,
+    ];
+  }
+  function edgeDetails(key) {
+    const e = cur.edges.find(x => x.key === key);
+    if (!e) return summary();
+    return [
+      h("button", { class: "back", onclick: () => select(null) }, "← Step overview"),
+      h("div", {}, h("div", { class: "kindline" }, e.plain ? "Connections" : "Arrow"), h("h2", {}, `${name(e.source)} ${e.plain ? "↔" : "→"} ${name(e.target)}`)),
+      e.what.length ? h("dl", { class: "facts" }, h("dt", {}, e.plain ? "Connections" : "Items"), h("dd", {}, e.what.map(link))) : null,
+    ];
+  }
+  function renderSide() {
+    const sel = S.sel;
+    const parts = !sel ? summary() : sel.startsWith("edge:") ? edgeDetails(sel.slice(5)) : byId[sel] ? details(sel) : summary();
+    $("side-in").replaceChildren(...parts.filter(Boolean));
+  }
+
+  // ---------------- render ----------------
+  async function render(force) {
+    document.title = `${D.drawable ? m.system.name : "Model"} review`;
+    renderTop(); renderSteps(); renderOutline(); renderBar();
+    const v = S.view && VIEWS[S.view];
+    const isDiagram = v && (v.type === "diagram" || v.type === "zoom");
+    stage.hidden = v && !isDiagram;
+    $("page").hidden = !v || isDiagram;
+    $("emptymsg").hidden = !!v;
+    if (!v) {
+      $("emptymsg").textContent = !D.drawable ? "The file does not match the format yet, so there is nothing to draw. The notes on the right say what to fix."
+        : VIEWS[Object.keys(VIEWS).find(k => VIEWS[k].step === S.step)]?.empty || "Nothing to show for this step yet.";
+      content.replaceChildren(); overlay.replaceChildren(); cur = { key: null, geo: {}, nodes: {}, edges: [], vis: {}, w: 0, h: 0 };
+    }
+    $("hint").textContent = touch ? "Drag to move · pinch to zoom · double-tap a dotted box to go inside"
+      : "Drag to move · Ctrl + scroll to zoom · Shift+1 fits · double-click a dotted box to go inside · Backspace goes up";
+    renderSide();
+    if (isDiagram) await renderDiagram(force); else if (v) renderPage();
+  }
+
+  // ---------------- live: `sysmodel serve` reloads the page when the model or the review file changes ----------------
+  function reload() {   // keep the zoom and scroll spots across the reload
+    try { sessionStorage.setItem("sysmodel.view", JSON.stringify({ key: cur.key, T: T.touched ? T : null, side: $("side-in").scrollTop, page: $("page").scrollTop })); } catch (e) {}
+    location.reload();
+  }
+  if (D.live) setInterval(async () => {
+    if (document.hidden || saving || document.activeElement?.matches("textarea, input[type=search]")) return;   // never reload under someone typing
+    try { if ((await (await fetch("api/version", { cache: "no-store" })).json()).version !== D.live.version) reload(); } catch (e) {}
+  }, 1500);
+
+  readHash();
+  document.fonts.load(`${FONT}px "Patrick Hand"`).catch(() => {}).then(() => render()).then(() => {
+    if (restore) { $("side-in").scrollTop = restore.side; $("page").scrollTop = restore.page; }
+    restore = null;
+  });
+  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => render(true));
+})();
+</script>
+</body>
+</html>

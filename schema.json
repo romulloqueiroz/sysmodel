@@ -1,0 +1,120 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "sysmodel system model",
+  "description": "One app's system model, after Buede & Miller, The Engineering Design of Systems (4th ed.), tailored for apps as described in SKILL.md. Ids are unique across the whole file. Links are plain fields read left to right: a function 'runs_in' a component, a test 'verifies' a requirement.",
+  "type": "object",
+  "required": ["system", "requirements"],
+  "additionalProperties": false,
+  "properties": {
+    "stages": {
+      "description": "Life-cycle stages this project writes requirements for (book: life-cycle phases). Default: [build, release].",
+      "type": "array", "items": {"enum": ["build", "release", "running", "updates", "shutdown"]}, "default": ["build", "release"]
+    },
+    "system": {
+      "description": "The system itself: root of the component tree.",
+      "type": "object", "required": ["id", "name"], "additionalProperties": false,
+      "properties": {"id": {"type": "string"}, "name": {"type": "string"}, "purpose": {"type": "string"}}
+    },
+    "stakeholders": {"type": "array", "items": {"$ref": "#/$defs/stakeholder"}},
+    "sources": {"type": "array", "items": {"$ref": "#/$defs/source"}},
+    "objectives": {"type": "array", "items": {"$ref": "#/$defs/objective"}},
+    "scenarios": {"type": "array", "items": {"$ref": "#/$defs/scenario"}},
+    "external": {"type": "array", "items": {"$ref": "#/$defs/external"}},
+    "items": {"type": "array", "items": {"$ref": "#/$defs/item"}},
+    "requirements": {"type": "array", "items": {"$ref": "#/$defs/requirement"}},
+    "functions": {"type": "array", "items": {"$ref": "#/$defs/function"}},
+    "components": {"type": "array", "items": {"$ref": "#/$defs/component"}},
+    "interfaces": {"type": "array", "items": {"$ref": "#/$defs/interface"}},
+    "tests": {"type": "array", "items": {"$ref": "#/$defs/test"}}
+  },
+  "$defs": {
+    "id": {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_.-]*$"},
+    "ids": {"type": "array", "items": {"$ref": "#/$defs/id"}},
+    "stakeholder": {
+      "type": "object", "required": ["id", "name"], "additionalProperties": false,
+      "properties": {"id": {"$ref": "#/$defs/id"}, "name": {"type": "string"}}
+    },
+    "source": {
+      "description": "A document or statement from stakeholders that requirements trace to.",
+      "type": "object", "required": ["id", "title"], "additionalProperties": false,
+      "properties": {"id": {"$ref": "#/$defs/id"}, "title": {"type": "string"}, "stakeholder": {"$ref": "#/$defs/id"}}
+    },
+    "objective": {
+      "description": "Node of the objectives hierarchy: what stakeholders value when comparing designs.",
+      "type": "object", "required": ["id", "name"], "additionalProperties": false,
+      "properties": {"id": {"$ref": "#/$defs/id"}, "name": {"type": "string"}, "parent": {"$ref": "#/$defs/id"},
+                     "weight": {"type": "number", "minimum": 0, "maximum": 1}}
+    },
+    "scenario": {
+      "description": "One way the system is used (the operational concept is the set of scenarios).",
+      "type": "object", "required": ["id", "name", "steps"], "additionalProperties": false,
+      "properties": {"id": {"$ref": "#/$defs/id"}, "name": {"type": "string"},
+                     "steps": {"type": "array", "items": {"type": "string"}, "minItems": 1}}
+    },
+    "external": {
+      "description": "Something outside the system. external = interacts both ways; enabling = supports the system's life cycle (build, deploy); context = can affect the system but is not affected by it.",
+      "type": "object", "required": ["id", "name", "kind"], "additionalProperties": false,
+      "properties": {"id": {"$ref": "#/$defs/id"}, "name": {"type": "string"},
+                     "kind": {"enum": ["external", "enabling", "context"]},
+                     "sends": {"$ref": "#/$defs/ids", "description": "Items it sends into the system"},
+                     "receives": {"$ref": "#/$defs/ids", "description": "Items it receives from the system"}}
+    },
+    "item": {
+      "description": "Something that flows between functions or across the system boundary (data, event, file, request).",
+      "type": "object", "required": ["id", "name"], "additionalProperties": false,
+      "properties": {"id": {"$ref": "#/$defs/id"}, "name": {"type": "string"}}
+    },
+    "requirement": {
+      "description": "A requirement, or a group of requirements if other requirements name it as parent.",
+      "type": "object", "required": ["id", "text"], "additionalProperties": false,
+      "properties": {
+        "id": {"$ref": "#/$defs/id"},
+        "text": {"type": "string"},
+        "category": {"enum": ["io", "system-wide", "trade-off", "qualification"]},
+        "subcategory": {"enum": ["input", "output", "external-interface", "functional",
+                                 "technology", "quality", "cost", "schedule",
+                                 "performance", "cost-performance",
+                                 "observance", "verification-plan", "validation-plan", "acceptance-plan"]},
+        "stage": {"enum": ["build", "release", "running", "updates", "shutdown"]},
+        "parent": {"$ref": "#/$defs/id", "description": "Requirement group this belongs to"},
+        "source": {"$ref": "#/$defs/id", "description": "Stakeholder source it comes from"},
+        "derived_from": {"$ref": "#/$defs/ids", "description": "Higher-level requirements it is derived from"},
+        "specifies": {"$ref": "#/$defs/ids", "description": "Functions, items, components or the system it constrains"},
+        "objective": {"$ref": "#/$defs/id", "description": "Objective it comes from"},
+        "threshold": {"type": "string", "description": "Minimum acceptable value, with units"}
+      }
+    },
+    "function": {
+      "description": "Something the system does: transforms inputs into outputs. Exactly one function has no parent (the system function).",
+      "type": "object", "required": ["id", "name"], "additionalProperties": false,
+      "properties": {
+        "id": {"$ref": "#/$defs/id"}, "name": {"type": "string"},
+        "parent": {"$ref": "#/$defs/id"},
+        "inputs": {"$ref": "#/$defs/ids"},
+        "outputs": {"$ref": "#/$defs/ids"},
+        "done_when": {"type": "string", "description": "Completion criterion"},
+        "runs_in": {"$ref": "#/$defs/id", "description": "Bottom-level component that performs it (bottom-level functions only)"}
+      }
+    },
+    "component": {
+      "description": "A part of the system (module, service, app, database). Bottom-level components are configuration items (CIs).",
+      "type": "object", "required": ["id", "name", "parent"], "additionalProperties": false,
+      "properties": {"id": {"$ref": "#/$defs/id"}, "name": {"type": "string"},
+                     "parent": {"$ref": "#/$defs/id", "description": "Parent component, or the system id"}}
+    },
+    "interface": {
+      "description": "A connection between two components, or between the system or a component and an external system, and the items it carries. Use the system as an endpoint before its components are designed.",
+      "type": "object", "required": ["id", "between", "carries"], "additionalProperties": false,
+      "properties": {"id": {"$ref": "#/$defs/id"}, "name": {"type": "string"},
+                     "between": {"$ref": "#/$defs/ids", "minItems": 2, "maxItems": 2},
+                     "carries": {"$ref": "#/$defs/ids"}}
+    },
+    "test": {
+      "description": "How a requirement is proven.",
+      "type": "object", "required": ["id", "name", "method", "verifies"], "additionalProperties": false,
+      "properties": {"id": {"$ref": "#/$defs/id"}, "name": {"type": "string"},
+                     "method": {"enum": ["automated", "manual"]},
+                     "verifies": {"$ref": "#/$defs/ids", "minItems": 1}}
+    }
+  }
+}
