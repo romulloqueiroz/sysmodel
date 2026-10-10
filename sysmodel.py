@@ -401,7 +401,7 @@ def c02(c):
     parents = {o.get("parent") for o in c.objs.values()}
     for i in c.objs:
         if i not in parents and i not in named_by:
-            yield i, "no requirement points to this goal in `objective`"
+            yield i, "no requirement points to this objective in `objective`"
 
 def c03(c):
     have = {r.get("subcategory") for r in c.leafreqs if r.get("category") == "qualification"}
@@ -418,13 +418,13 @@ def c04(c):
             total = sum(o["weight"] for o in os)
             if abs(total - 1) > 0.01 + 1e-9:
                 where_ = f"under {parent}" if parent else "at the top"
-                yield parent or os[0]["id"], f"goal weights {where_} add up to {round(total, 4):g}, they should add up to 1"
+                yield parent or os[0]["id"], f"objective weights {where_} add up to {round(total, 4):g}, they should add up to 1"
 
 def c05(c):
     named_by = {s for t in c.m.get("tests") or [] for s in t.get("scenarios") or []}
     for s in c.m.get("scenarios") or []:
         if s["id"] not in named_by:
-            yield s["id"], "no test lists this story in `scenarios`"
+            yield s["id"], "no test lists this scenario in `scenarios`"
 
 def c06(c):
     made = {(p, q, i) for p, q, i in flows(c) if p and q and p != q}
@@ -468,10 +468,10 @@ RULES = [
     ("R30", 4, "error", 57, "(a) io and system-wide requirements reach a part", r30a),
     ("R30", 5, "error", 57, "(b) anything passing between parts is carried by an interface", r30b),
     ("C01", 2, "warning", 59, "items an outside system exchanges are listed by an io requirement", c01),
-    ("C02", 1, "warning", 143, "every smallest goal is named by a requirement", c02),
+    ("C02", 1, "warning", 143, "every smallest objective is named by a requirement", c02),
     ("C03", 1, "advice", 142, "every kind of qualification has a requirement", c03),
-    ("C04", 1, "warning", 155, "goal weights at the same level add up to 1", c04),
-    ("C05", 6, "warning", 56, "every story is named by a test", c05),
+    ("C04", 1, "warning", 155, "objective weights at the same level add up to 1", c04),
+    ("C05", 6, "warning", 56, "every scenario is named by a test", c05),
     ("C06", 5, "warning", 48, "every item an interface carries really passes between its ends", c06),
 ]
 

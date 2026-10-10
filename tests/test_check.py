@@ -343,10 +343,10 @@ def test_c01_names_the_item():
 def test_c02_c04_c05_c03_messages():
     m = copy.deepcopy(VALID)
     m["objectives"] += [{"id": "O2", "name": "Fast", "parent": "O1"}]
-    assert msgs(m, "C02") == [("O2", "no requirement points to this goal in `objective`")]
+    assert msgs(m, "C02") == [("O2", "no requirement points to this objective in `objective`")]
     m = copy.deepcopy(VALID)
     E(m, "objectives", "O1")["weight"] = 0.9
-    assert msgs(m, "C04") == [("O1", "goal weights at the top add up to 0.9, they should add up to 1")]
+    assert msgs(m, "C04") == [("O1", "objective weights at the top add up to 0.9, they should add up to 1")]
     E(m, "objectives", "O1")["weight"] = 0.995                     # within the tolerance
     assert msgs(m, "C04") == []
     m["objectives"] += [{"id": "O2", "name": "Fast", "parent": "O1", "weight": 0.5},
@@ -356,10 +356,10 @@ def test_c02_c04_c05_c03_messages():
     E(m, "objectives", "O4")["weight"] = 0.3
     assert msgs(m, "C04") == []
     E(m, "objectives", "O4")["weight"] = 0.4
-    assert msgs(m, "C04") == [("O1", "goal weights under O1 add up to 1.1, they should add up to 1")]
+    assert msgs(m, "C04") == [("O1", "objective weights under O1 add up to 1.1, they should add up to 1")]
     m = copy.deepcopy(VALID)
     m["scenarios"] = [{"id": "SC1", "name": "Visit", "steps": ["Web visitor sends Short code"]}]
-    assert msgs(m, "C05") == [("SC1", "no test lists this story in `scenarios`")]
+    assert msgs(m, "C05") == [("SC1", "no test lists this scenario in `scenarios`")]
     E(m, "tests", "T1")["scenarios"] = ["SC1"]
     assert msgs(m, "C05") == [] and "S03" not in rules(m)
     E(m, "tests", "T1")["scenarios"] = ["Q1"]
