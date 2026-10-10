@@ -1139,7 +1139,7 @@ dl.facts dd { margin: 0; min-width: 0; display: flex; flex-wrap: wrap; gap: 4px;
   function details(id) {
     const [word, term] = kindWords(id), v = S.view && VIEWS[S.view];
     const fs = probs(id), F = facts(id);
-    const canOpen = v?.z && v.z.kids(id).length > 0;
+    const canOpen = v?.z && v.z.kids(id).length > 0 && id !== focusOf(S.view);   // the box you are inside is already open
     return [
       h("button", { class: "back", onclick: () => select(null) }, "← Step overview"),
       h("div", {}, h("div", { class: "kindline" }, word, term ? ` · ${term}` : "", " ", h("code", {}, id)),
