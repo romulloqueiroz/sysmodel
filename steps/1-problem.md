@@ -44,7 +44,7 @@ Fix the design problem: how the app is used (scenarios), where it stops and what
    - An objective is something stakeholders value enough to pay for: more of it, or less cost (p. 154). Root = overall value; children are its natural parts. Usually 2 to 5 levels; do not decompose too far (pp. 154, 156). Leaves are measurable (response time, availability, monthly cost).
    - Drop means objectives (how: "use serverless", "add a cache") and strategic ones the app cannot settle ("grow brand awareness"). If one objective matters only because it improves another, it is a means (p. 154).
    - `weight` says how much a swing from an objective's worst acceptable to best likely value matters among its siblings (p. 156). The book's sibling weights add to 1 (p. 155). Weights are the stakeholders' values, not the engineer's guess (p. 156).
-   - **Ask:** If you could improve only one of these, from the worst value you would accept to the best you expect, which first? How do you rank the rest?
+   - **Ask:** first what the app must be good at: offer the objectives you drafted, and let the engineer add or drop. Then: If you could improve only one of these, from the worst value you would accept to the best you expect, which first? How do you rank the rest?
    - The value range per leaf has no field: its worst value goes in a linked requirement's `threshold`, its best as the design goal in that requirement's text; value curves go in the hand-off.
    - Each leaf objective should be the `objective` of at least one requirement (Fig 6.4, p. 143).
 5. **Requirements** (A1114, pp. 137-146, 158-163)

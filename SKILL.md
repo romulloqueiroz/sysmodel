@@ -55,11 +55,14 @@ Read the step's guide before working on it. Each says what the step fills in, wh
    - The guide's **Ask:** lines are a list to choose from, not a script. Skip what the brief, the repo or an earlier
      answer already settles.
    - Ask with the AskUserQuestion tool, in rounds of at most 4 questions, most important first (the guide's order).
-     Give each question 2-4 likely answers drafted from what you know, your recommendation first, marked
-     "(Recommended)"; the engineer can always type their own. Numbers too: offer 2-4 sensible values.
-   - One thing per question, in one short line. Ask another round only for what the answers left open.
-   - Where you can propose a sensible value yourself (wording, a technical default), don't ask: use it, and list it
-     in the hand-off as unconfirmed.
+     Give each question 2-4 likely answers drafted from what you know; the engineer can always type their own.
+     Numbers too: offer 2-4 sensible values. Mark a recommendation "(Recommended)" only on a choice you can judge.
+     Recommend nothing for facts only the engineer knows (team size, dates) or for what matters most (rule R28).
+   - One thing per question (one number each), in one short line. Ask another round only for what the answers left open.
+   - Don't ask how to build it (web or native, which database): that's step 3, unless the engineer sets it as a rule.
+   - Where you can propose a sensible value yourself (wording, a technical default), don't ask: use it, give it a
+     source of its own titled "Proposed by the AI, to confirm in review", and list it in the hand-off. Never credit
+     a proposal to the engineer's answers.
    - Without the AskUserQuestion tool, ask the same small rounds as a numbered list with the suggested answers.
 5. Edit the model. Keep ids stable: links and approvals hang on them. For a new model use short ids like the example's (`Q1`, `F11`, `C2`);
    otherwise follow the style already in the file.

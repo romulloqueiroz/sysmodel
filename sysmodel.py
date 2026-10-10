@@ -820,7 +820,7 @@ def main(argv=None):
             sys.exit(f"cannot find {args.model}")
         srv = make_server(args.model, args.step, args.port)
         url = f"http://127.0.0.1:{srv.server_address[1]}/"
-        print(f"Reviewing {args.model} at {url}\nDecisions go to {review_path(args.model)}. Press Ctrl+C to stop.")
+        print(f"Reviewing {args.model} at {url}\nDecisions go to {review_path(args.model)}. Press Ctrl+C to stop.", flush=True)  # flush: seen at once when run in the background
         webbrowser.open(url)
         try:
             srv.serve_forever()
