@@ -43,16 +43,14 @@ REFS = [  # (kind, field, allowed target kinds)
     ("interface", "between", ("component", "system", "external")), ("interface", "carries", ("item",)),
     ("test", "verifies", ("requirement",)), ("test", "scenarios", ("scenario",))]
 JUDGMENT = [  # (id, step it starts at, book page, text)
-    ("R12", 2, 102, "Each function's subfunctions partition its behavior: no overlaps, no gaps."),
-    ("R13", 3, 102, "The component breakdown is a partition."),
-    ("R19", 1, 48, "The external systems and items match the scenarios."),
-    ("R27", 1, 58, "Each requirement is one testable statement: subject, shall, relation, "
-                   "threshold with units; no 'and/or', no negatives."),
-    ("R28", 1, 141, "Trade-off requirements reflect stakeholder preferences (objectives)."),
-    ("R31", 1, 138, "No requirement or the purpose names a solution (product, technology, hosting, a part) "
-                    "unless the engineer set it as a rule."),
-    ("R32", 1, 134, "The requirements can all be met together within the cost and date "
-                    "(the feasibility argument in decisions.md).")]
+    ("R12", 2, 102, "Each job's sub-jobs together do exactly that job: nothing missing, nothing done twice."),
+    ("R13", 3, 102, "Each part's sub-parts together make up exactly that part: nothing missing, nothing counted twice."),
+    ("R19", 1, 48, "The outside systems, and what they send and get, match the stories (scenarios)."),
+    ("R27", 1, 58, "Each requirement says one testable thing, with a number and units when it measures something."),
+    ("R28", 1, 141, "The weights for comparing designs follow your priorities."),
+    ("R31", 1, 138, "Neither the purpose nor any requirement names a product, technology or host, "
+                    "unless you set it as a rule."),
+    ("R32", 1, 134, "All the requirements can be met together within the budget and date (see the AI's notes).")]
 SEVERITIES = ("error", "warning", "advice")
 
 # ---- model index and helpers -------------------------------------------------
@@ -597,14 +595,18 @@ def review_state(m, decisions, step):
         out[n] = {"fingerprint": fp, "last": last, "current": bool(last) and last.get("fingerprint") == fp}
     return out
 
-def render(m, step=6, decisions=None, live=None):
+def read_notes(model):
+    f = Path(model).with_name("decisions.md")
+    return f.read_text() if f.is_file() else None
+
+def render(m, step=6, decisions=None, live=None, notes=None):
     """Self-contained HTML review page for steps 1..step (pictures drawn in the browser).
-    decisions: from load_reviews. live: {"version": ...} when `serve` hands the page out, so it can save decisions."""
+    decisions: from load_reviews. notes: text of decisions.md. live: {"version": ...} when `serve` hands the page out, so it can save decisions."""
     found = check_model(m, step)
     drawable = not any(f["rule"] == "S01" for f in found)
     data = {"model": m, "step": step, "steps": STEPS, "findings": found, "drawable": drawable,
             "judgment": [{"rule": r, "step": st, "text": t, "page": pg} for r, st, pg, t in JUDGMENT if st <= step],
-            "review": review_state(m, decisions or {}, step) if drawable else {}, "live": live}
+            "review": review_state(m, decisions or {}, step) if drawable else {}, "live": live, "notes": notes}
     blob = json.dumps(data, ensure_ascii=False, default=str).replace("</", "<\\/")
     return Path(__file__).with_name("render.html").read_text().replace("/*DATA*/null", blob)
 
@@ -820,7 +822,7 @@ def make_server(model, step=6, port=8765):
 
     def version():
         return "-".join(f"{s.st_mtime_ns}.{s.st_size}" if s else "0" for s in
-                        (p.stat() if p.exists() else None for p in (model, reviews)))
+                        (p.stat() if p.exists() else None for p in (model, reviews, model.with_name("decisions.md"))))
 
     def decide(body):
         """Save one decision; returns (http status, reply)."""
@@ -888,7 +890,7 @@ def make_server(model, step=6, port=8765):
             except (OSError, yaml.YAMLError) as e:
                 page = UNREADABLE.format(name=html.escape(model.name), error=html.escape(str(e)), version=json.dumps(v))
                 return self.reply(200, page, "text/html")
-            page = render(m, step, load_reviews(reviews), {"version": v})
+            page = render(m, step, load_reviews(reviews), {"version": v}, read_notes(model))
             for url, name in VENDOR.items():
                 page = page.replace(url, "/vendor/" + name)
             self.reply(200, page, "text/html")
@@ -989,7 +991,7 @@ def main(argv=None):
         return 0
     if args.cmd == "render":
         out = Path(args.out or Path(args.model).with_suffix(".html"))
-        out.write_text(render(m, args.step, load_reviews(review_path(args.model))))
+        out.write_text(render(m, args.step, load_reviews(review_path(args.model)), notes=read_notes(args.model)))
         print(f"wrote {out}")
         return 0
     found = check_model(m, args.step)

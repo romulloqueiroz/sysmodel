@@ -156,6 +156,11 @@ tr.group td { font: 1.1rem var(--hand); color: var(--muted); padding-top: 14px; 
 .prob:hover { border-color: var(--accent); }
 .prob .chip { margin-right: 6px; }
 .prob .ref { display: block; color: var(--muted); font-size: .78rem; margin-top: 2px; }
+.notes { display: grid; gap: 8px; }
+.notes h5, .notes h6 { font-size: .95rem; margin: 4px 0 0; }
+.notes ul { margin: 0; padding-left: 1.3em; display: grid; gap: 3px; }
+.notes code { font-size: .85rem; background: var(--hover); border-radius: 5px; padding: 0 4px; }
+.notes .scroll { overflow-x: auto; }
 .clean { font: 1.15rem var(--hand); color: var(--ok); }
 dl.facts { margin: 0; display: grid; grid-template-columns: minmax(84px, auto) 1fr; gap: 8px 12px; }
 dl.facts dt { color: var(--muted); font-size: .85rem; }
@@ -892,10 +897,11 @@ dl.facts dd { margin: 0; min-width: 0; display: flex; flex-wrap: wrap; gap: 4px;
     return h("div", { class: "tools" }, q, h("label", {}, only, toggleLabel), shown);
   }
   const rowClick = e => { const r = e.target.closest("tr[data-id]"); if (r) select(r.dataset.id); };
+  const proposed = r => /^Proposed by the AI/.test(el(r.source)?.title || "");
   function reqTable() {
     const rows = list("requirements").map(r => reqParents.has(r.id)
       ? h("tr", { class: "group" }, h("td", { colspan: 5 }, r.text))
-      : h("tr", { "data-id": r.id }, h("td", { class: "id" }, r.id), h("td", {}, r.text),
+      : h("tr", { "data-id": r.id }, h("td", { class: "id" }, r.id), h("td", {}, r.text, proposed(r) ? [" ", h("span", { class: "chip advice" }, "proposed")] : null),
           h("td", {}, [r.category, r.subcategory].filter(Boolean).join(" / ")), h("td", {}, r.stage || ""),
           h("td", {}, badge(r.id) ? h("span", { class: "chip error" }, `${badge(r.id)} to fix`) : "")));
     const tbody = h("tbody", { onclick: rowClick }, rows);
@@ -928,8 +934,39 @@ dl.facts dd { margin: 0; min-width: 0; display: flex; flex-wrap: wrap; gap: 4px;
       h("p", { class: "guide" }, st.check),
       h("div", {}, h("h4", {}, fs.length ? `Things to look at (${fs.length})` : "Things to look at"),
         fs.length ? probCards(fs) : h("p", { class: "clean" }, "Nothing found for this step.")),
+      notesSection(),
       reviewCard(),
     ];
+  }
+  function notesSection() {
+    const mine = (D.notes || "").split(/^(?=## )/m).find(t => new RegExp(`^## Step ${S.step}\\b`).test(t));
+    return mine ? h("div", { class: "notes" }, h("h4", {}, "The AI's notes"), mdBlocks(mine.replace(/^.*\n?/, ""))) : null;
+  }
+  function mdInline(t) {
+    return t.split(/(\*\*.+?\*\*|`[^`]+`)/).map(p => p.startsWith("**") && p.length > 4 ? h("b", {}, p.slice(2, -2))
+      : p.startsWith("`") && p.length > 2 ? h("code", {}, p.slice(1, -1)) : p);
+  }
+  function mdBlocks(text) {
+    const out = [], L = text.split("\n"), cells = l => l.trim().replace(/^\||\|$/g, "").split("|").map(c => c.trim());
+    for (let i = 0; i < L.length; i++) {
+      const l = L[i], hd = /^(#{3,4})\s+(.*)/.exec(l);
+      if (!l.trim()) continue;
+      if (hd) out.push(h(hd[1].length === 3 ? "h5" : "h6", {}, mdInline(hd[2])));
+      else if (/^\s*[-*] /.test(l)) {
+        const items = [];
+        for (; i < L.length && /^\s*[-*] /.test(L[i]); i++) items.push(h("li", {}, mdInline(L[i].replace(/^\s*[-*] /, ""))));
+        i--; out.push(h("ul", {}, items));
+      } else if (l.includes("|") && /^[\s|:-]+$/.test(L[i + 1] || "") && (L[i + 1] || "").includes("-")) {
+        const rows = [];
+        for (i += 2; i < L.length && L[i].includes("|"); i++) rows.push(h("tr", {}, cells(L[i]).map(c => h("td", {}, mdInline(c)))));
+        i--; out.push(h("div", { class: "scroll" }, h("table", {}, h("thead", {}, h("tr", {}, cells(l).map(c => h("th", {}, mdInline(c))))), h("tbody", {}, rows))));
+      } else {
+        const para = [];
+        for (; i < L.length && L[i].trim() && !/^(#{3,4}\s|\s*[-*] )/.test(L[i]); i++) para.push(L[i].trim());
+        i--; out.push(h("p", {}, mdInline(para.join(" "))));
+      }
+    }
+    return out;
   }
   function reviewCard() {
     if (!D.drawable) return null;

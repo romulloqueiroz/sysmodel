@@ -209,3 +209,22 @@ def test_wait_returns_when_a_person_decides(tmp_path, capsys, monkeypatch):
     assert sysmodel.main(["wait", str(model)]) == 0
     assert capsys.readouterr().out == ("Step 2 Functions: sent back by ana, 2026-10-10 09:05\nNote: Split Q7\n\n"
                                        "Run `status` and go on with the loop.\n")
+
+
+def test_page_data_carries_decisions_md_next_to_the_model(tmp_path):
+    src = tmp_path / "app.yaml"
+    src.write_text(yaml.safe_dump(VALID))
+    assert sysmodel.main(["render", str(src)]) == 0
+    assert page_data((tmp_path / "app.html").read_text())["notes"] is None
+    (tmp_path / "decisions.md").write_text("## Step 1 Problem\n- **cost** `x`\n")
+    assert sysmodel.main(["render", str(src)]) == 0
+    assert page_data((tmp_path / "app.html").read_text())["notes"] == "## Step 1 Problem\n- **cost** `x`\n"
+
+
+def test_serve_notes_show_and_version_follows_decisions_md(served):
+    model, call = served
+    assert page_data(call("GET", "/")[2].decode())["notes"] is None
+    v0 = json.loads(call("GET", "/api/version")[2])["version"]
+    (model.parent / "decisions.md").write_text("## Step 1 Problem\nhello\n")
+    assert json.loads(call("GET", "/api/version")[2])["version"] != v0
+    assert page_data(call("GET", "/")[2].decode())["notes"].startswith("## Step 1")
