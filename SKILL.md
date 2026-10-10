@@ -28,6 +28,9 @@ Run `python3 ${CLAUDE_SKILL_DIR}/sysmodel.py <command> <model>`:
   convention). No model yet: ask what the app is for and who uses it, create `design/system.yaml`, and start step 1.
 - **Schema**: `${CLAUDE_SKILL_DIR}/schema.json` lists the only fields the model may have. A small valid model to copy from:
   `${CLAUDE_SKILL_DIR}/tests/fixtures/valid.yaml`.
+- **Answers**: `answers.md` next to the model. After each round of questions, append the date, each question and the
+  engineer's answer, word for word. A source that is a conversation points here (title it `answers.md, <date>`), so a
+  later session can tell what the engineer said from what you proposed.
 - **Reviews**: `<model>.review.yaml` next to the model, written by `serve` when a person clicks Approve or Send back.
   Read it for the notes. **Never edit it.**
 

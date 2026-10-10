@@ -24,7 +24,7 @@ Fix the design problem: how the app is used (scenarios), where it stops and what
    - Propose `stakeholders` from the brief and repo. Think past "user": payer, developer, tester, deployer, operator on call, maintainer, support, anyone harmed by a failure (p. 132). Each sees the system differently; leaving one out makes the app look like a failure from that view.
    - **Ask:** Who uses this app, who pays for it, who builds and runs it, and who is hurt if it fails?
    - Add a `sources` entry for each document or talk the requirements come from (brief, ticket, interview, policy, contract).
-   - **Ask:** Which documents or conversations say what you need? With none, record the engineer's answers, dated, as the source (a statement counts, p. 145).
+   - **Ask:** Which documents or conversations say what you need? With none, the source is the engineer's answers, written to `answers.md` (see SKILL.md) and dated (a statement counts, p. 145).
    - Never cite a source nobody gave. R21 only checks that a source id exists.
 2. **Operational concept** (A1111, pp. 136, 146-151)
    - Set `system.purpose`. **Ask:** In a sentence or two, what problem does this solve, and for whom? State it without a solution, and check it is the right level, not too big or small (pp. 132-133).
