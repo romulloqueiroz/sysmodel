@@ -172,6 +172,13 @@ def test_s01_stops_everything_else():
     assert rules(m) == {"S01"}
 
 
+def test_component_choice_is_a_string():
+    m = copy.deepcopy(VALID)
+    assert E(m, "components", "C2")["choice"] == "Managed key-value" and rules(m) == set()
+    E(m, "components", "C2")["choice"] = 7
+    assert rules(m) == {"S01"}
+
+
 def test_s01_unknown_field():
     m = copy.deepcopy(VALID)
     m["bogus"] = 1

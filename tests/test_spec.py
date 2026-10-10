@@ -88,7 +88,7 @@ def test_spec_for_a_leaf_part(tmp_path, capsys):
 
 def test_spec_for_a_part_made_of_parts(tmp_path, capsys):
     out = build(approved(tmp_path), "C1", capsys)
-    assert f"Part of S URL shortener: {PURPOSE}.\n\nMade of: C11 Shorten endpoint, C12 Redirect endpoint\n\nGenerated" in out
+    assert f"Part of S URL shortener: {PURPOSE}.\n\nBuilt with: Serverless functions\n\nMade of: C11 Shorten endpoint, C12 Redirect endpoint\n\nGenerated" in out
     jobs = under(out, "## Jobs")
     assert "- Runs in: C11 Shorten endpoint" in jobs and "- Runs in: C12 Redirect endpoint" in jobs
     assert "- Takes: I3 Short code from E1 Web visitor; I6 Stored target from C2 Database" in jobs
@@ -97,6 +97,12 @@ def test_spec_for_a_part_made_of_parts(tmp_path, capsys):
     assert "| IF2 Storage access | C2 Database | I6 Stored target | I5 Link record |" in conn
     assert conn.count("\n| ") == 3                                # header and the two interfaces; nothing between C11 and C12
     assert "Shared with" not in out                               # Q1 stays inside C1
+
+
+def test_spec_says_what_the_part_is_built_with(tmp_path, capsys):
+    out = build(approved(tmp_path), "C2", capsys)
+    assert f"Part of S URL shortener: {PURPOSE}.\n\nBuilt with: Managed key-value\n\nGenerated" in out
+    assert "Built with" not in build(approved(tmp_path), "C11", capsys)   # C1's choice is not its child's
 
 
 def test_spec_gives_a_derived_requirement_to_the_part_it_names(tmp_path, capsys):

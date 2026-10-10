@@ -25,6 +25,7 @@ def test_fingerprint_covers_only_what_the_step_shows():
     assert changed_steps(lambda m: E(m, "requirements", "Q1").update(text="x")) == {1, 6}
     assert changed_steps(lambda m: E(m, "functions", "F11").update(runs_in="C12")) == {4}   # matching isn't step 2's call
     assert changed_steps(lambda m: E(m, "functions", "F11").update(name="x")) == {2, 4}
+    assert changed_steps(lambda m: E(m, "components", "C2").update(choice="SQLite")) == {3, 4, 5}
     assert changed_steps(lambda m: E(m, "interfaces", "IF1").update(carries=["I1"])) == {5}
     assert changed_steps(lambda m: E(m, "items", "I1").update(name="x")) == {1, 2, 5}          # crosses the boundary
     assert changed_steps(lambda m: E(m, "items", "I5").update(name="x")) == {2, 5}             # internal
@@ -42,6 +43,9 @@ def test_review_state_goes_stale_when_the_step_changes():
     E(m, "components", "C2").update(name="Store")
     st = sysmodel.review_state(m, decisions, 6)
     assert not st[3]["current"] and st[3]["last"]["decision"] == "approved" and st[1]["last"] is None
+    m = copy.deepcopy(VALID)
+    E(m, "components", "C2").update(choice="SQLite")
+    assert not sysmodel.review_state(m, decisions, 6)[3]["current"]
 
 
 def test_cli_render_shows_saved_reviews(tmp_path):

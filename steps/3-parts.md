@@ -3,8 +3,9 @@
 Decide the parts the app is built from: a tree of components (p. 210) from the system down to the smallest pieces someone builds and tests (configuration items, p. 210). Step 4 puts every leaf function into one leaf part and step 5 connects the parts, so this tree fixes who owns what and where the seams are. Book: Ch 8, activities A1131–A1133 (p. 215).
 
 ## Fills in
-- `components[]` (physical architecture, p. 210): one entry per part: `id`, `name`, `parent`.
+- `components[]` (physical architecture, p. 210): one entry per part: `id`, `name`, `parent`, `choice`.
 - `parent` (decomposition, p. 210): the system id for first-level parts, a component id below. A component that nobody names as `parent` is a leaf (a configuration item).
+- `choice`: the option the chosen alternative uses for that part (a product, language or service, such as SQLite), so the build spec can say what to build it with. `name` stays the role. Leave it out where no option was picked.
 - Nothing else. The generic architecture, the morphological box, the alternatives and the reason for the pick have no field. They go in your hand-off message (Do 7).
 
 ## Start from
@@ -22,12 +23,12 @@ Decide the parts the app is built from: a tree of components (p. 210) from the s
    If an availability requirement exists and one part everything depends on is a single point of failure, say how you handled it (p. 227, 231, 236). A standby or replica adds parts and usually functions such as detect failure and switch over (p. 231, 233): that edits step 2, so propose and ask first.
    **Ask:** (only if the weights do not settle it) When cost, speed and availability conflict, which wins here?
    The pick is provisional: step 4 may send you back here (p. 216). Propose the pick; the engineer confirms at approval.
-5. **Write the tree** (p. 210, 214). Put the chosen alternative's parts in `components`. Use role names ("Database"), not products. If the engineer wants a product to be binding, that is a technology requirement, which edits step 1: propose it and ask first. Go down only as far as the leaf functions need: step 4 warns about a leaf part that no function runs in.
+5. **Write the tree** (p. 210, 214). Put the chosen alternative's parts in `components`. `name` is the role ("Database"); put the chosen alternative's option for that part in `choice` ("SQLite"). If the engineer wants a product to be binding, that is a technology requirement, which edits step 1: propose it and ask first. Go down only as far as the leaf functions need: step 4 warns about a leaf part that no function runs in.
 6. **Check the partition** (R13, p. 102). For each level, write one line per part saying what it owns. No two parts may own the same thing (overlap) and nothing the app must do may be owned by none (gap). Fix both before the hand-off.
 7. **Hand-off content.** The model keeps only the pick, so present: the generic parts, the box (columns and options), the alternatives with their themes, how each did on the four issues, the combinations you ruled out, the pick and why it beat the others, and any step 1 or 2 change you propose.
 
 ## Good vs bad
-- Generic first, instances second (p. 211, 213). Bad: parts named `Redis`, `Express`, `Vercel`. Good: `Cache`, `Web service`, `Hosting`; the products are options in the box.
+- Generic first, instances second (p. 211, 213). Bad: parts named `Redis`, `Express`, `Vercel`. Good: `name: Cache, choice: Redis`, `name: Web service, choice: Express`, `name: Hosting, choice: Vercel`; the products are options in the box, and the pick goes in `choice`.
 - Every column has two or more real options; a column with one is a decision already made (p. 218). Say which ones are fixed.
 - Never compare one or two designs only (p. 217). Make many options first, prune later (p. 216).
 - One box per system concept; do not mix options from different styles in one box (p. 219).
@@ -58,8 +59,8 @@ Pick: B.
 What lands in the model (matches `tests/fixtures/valid.yaml`):
 ```yaml
 components:
-  - {id: C1, name: Web service, parent: S}
+  - {id: C1, name: Web service, parent: S, choice: Serverless functions}
   - {id: C11, name: Shorten endpoint, parent: C1}
   - {id: C12, name: Redirect endpoint, parent: C1}
-  - {id: C2, name: Database, parent: S}
+  - {id: C2, name: Database, parent: S, choice: Managed key-value}
 ```

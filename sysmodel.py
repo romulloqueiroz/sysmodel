@@ -628,6 +628,8 @@ def part_spec(m, comp, decisions, source):
     n = max(range(1, 7), key=lambda s: (str(decisions[s].get("at")), s))   # same minute: the later step
     out = [f"# Spec: {named(c, comp)}", "",
            (f"Part of {system}" if parent == c.sid else f"Part of {named(c, parent)}, in {system}") + (f": {purpose}." if purpose else ".")]
+    if c.comps[comp].get("choice"):
+        out += ["", f"Built with: {c.comps[comp]['choice']}"]
     if comp not in c.cleaf:
         out += ["", f"Made of: {names(c, c.ckids[comp])}"]
     out += ["", f"Generated from {source} after all six steps were approved (latest: step {n} by {decisions[n].get('by')}, "

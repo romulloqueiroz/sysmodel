@@ -279,6 +279,7 @@ dl.facts dd { margin: 0; min-width: 0; display: flex; flex-wrap: wrap; gap: 4px;
   const el = id => byId[id]?.el;
   const kindOf = id => byId[id]?.kind;
   const name = id => { const e = el(id); return (e && (e.name || e.title || e.text)) || id; };
+  const label = id => { const c = el(id)?.choice; return c ? `${name(id)} · ${c}` : name(id); };   // a part shows what it is built with
   const kidsMap = (els, parentOf) => { const k = {}; for (const e of els) (k[parentOf(e)] ??= []).push(e.id); return id => k[id] || []; };
   const fkids = kidsMap(list("functions"), f => f.parent || SID);
   const ckids = kidsMap(list("components"), c => c.parent);
@@ -326,7 +327,7 @@ dl.facts dd { margin: 0; min-width: 0; display: flex; flex-wrap: wrap; gap: 4px;
     return lines;
   };
   const leaf = (id, kind, extra = {}) => {
-    const lines = extra.lines || wrap(name(id)), hint = extra.hint ? 18 : 0;
+    const lines = extra.lines || wrap(label(id)), hint = extra.hint ? 18 : 0;
     return { id, kind, ...extra, lines,
       width: Math.max(110, ...lines.map(l => textW(l, FONT) + 36), extra.hint ? textW(extra.hint, 14) + 28 : 0),
       height: 26 + lines.length * 21 + hint };
@@ -351,11 +352,11 @@ dl.facts dd { margin: 0; min-width: 0; display: flex; flex-wrap: wrap; gap: 4px;
       if (sub.length) { closeAll(id, id); return leaf(id, z.kind(id), { closed: true, hint: hint(sub.length) }); }
       vis[id] = id;
       const inn = innerNodes(id);
-      return inn.length ? { id, kind: z.kind(id), lines: [name(id)], children: inn, layoutOptions: { "elk.padding": PAD } } : leaf(id, z.kind(id));
+      return inn.length ? { id, kind: z.kind(id), lines: [label(id)], children: inn, layoutOptions: { "elk.padding": PAD } } : leaf(id, z.kind(id));
     };
     vis[focus] = focus;
     const inside = z.kids(focus).map(node).concat(innerNodes(focus));
-    const nodes = [{ id: focus, kind: z.kind(focus), lines: [name(focus)], children: inside, layoutOptions: { "elk.padding": PAD } }];
+    const nodes = [{ id: focus, kind: z.kind(focus), lines: [label(focus)], children: inside, layoutOptions: { "elk.padding": PAD } }];
     const fchain = chainBy(z.up)(focus);
     const rep = x => vis[x] || chainBy(z.up)(x).reverse().find(y => !fchain.includes(y));
     const drawn = new Set(Object.values(vis));
@@ -601,7 +602,7 @@ dl.facts dd { margin: 0; min-width: 0; display: flex; flex-wrap: wrap; gap: 4px;
     const swatch = id => ({ system: "--sys", function: "--func", component: "--comp", external: "--ext", objective: "--obj" })[kindOf(id)] || "--enab";
     const item = n => h("li", {},
       h("button", { class: path.includes(n.id) ? "here" : null, "aria-selected": S.sel === n.id ? "true" : null, onclick: () => goTo(n.id) },
-        h("span", { class: "sw", style: `background: var(${swatch(n.id)})` }), name(n.id), badge(n.id) ? h("span", { class: "dotw", title: "Has problems" }) : null),
+        h("span", { class: "sw", style: `background: var(${swatch(n.id)})` }), label(n.id), badge(n.id) ? h("span", { class: "dotw", title: "Has problems" }) : null),
       n.kids.length ? h("ul", {}, n.kids.map(item)) : null);
     $("outline").replaceChildren(...roots.map(item));
   }
@@ -966,7 +967,7 @@ dl.facts dd { margin: 0; min-width: 0; display: flex; flex-wrap: wrap; gap: 4px;
     if (k === "function") { add("Part of", e.parent ? link(e.parent) : null); add("Smaller jobs", links(fkids(id)));
       add("Takes in", links(e.inputs)); add("Gives out", links(e.outputs)); add("Done when", e.done_when);
       add("Runs in", e.runs_in ? link(e.runs_in) : null); add("Requirements", links(reqsOn(id))); }
-    if (k === "component") { add("Part of", link(e.parent)); add("Smaller parts", links(ckids(id)));
+    if (k === "component") { add("Part of", link(e.parent)); add("Built with", e.choice); add("Smaller parts", links(ckids(id)));
       const jobs = leafFuncs.filter(f => subtree(id, ckids).includes(f.runs_in)).map(f => f.id);
       add("Jobs", links(jobs)); add("Connections", links(ifacesOf(id))); add("Requirements", links(reqsOn(id))); }
     if (k === "external") { add("Type", KIND[e.kind][0]); add("Sends", links(e.sends)); add("Receives", links(e.receives)); add("Connections", links(ifacesOf(id))); }

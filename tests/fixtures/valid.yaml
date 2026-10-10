@@ -56,10 +56,10 @@ functions:
   - {id: F12, name: Redirect visitor, parent: F1, inputs: [I3, I6], outputs: [I4], done_when: Visitor redirected, runs_in: C12}
   - {id: F2, name: Store links, parent: F0, inputs: [I5], outputs: [I6], done_when: Link persisted, runs_in: C2}
 components:
-  - {id: C1, name: Web service, parent: S}
+  - {id: C1, name: Web service, parent: S, choice: Serverless functions}
   - {id: C11, name: Shorten endpoint, parent: C1}
   - {id: C12, name: Redirect endpoint, parent: C1}
-  - {id: C2, name: Database, parent: S}
+  - {id: C2, name: Database, parent: S, choice: Managed key-value}
 interfaces:
   - {id: IF1, name: Public HTTP, between: [E1, C1], carries: [I1, I2, I3, I4]}
   - {id: IF2, name: Storage access, between: [C1, C2], carries: [I5, I6]}
