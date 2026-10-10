@@ -7,7 +7,6 @@ objectives:
   - {id: O1, name: Low running cost}
 external:
   - {id: E1, name: Web visitor, kind: external, sends: [I1, I3], receives: [I2, I4]}
-  - {id: E2, name: Build pipeline, kind: enabling}
 items:
   - id: I1
     name: Long URL
@@ -28,7 +27,7 @@ requirements:
     stage: release
     parent: Q0
     source: SRC1
-    specifies: [F1]
+    specifies: [F1, I2]
   - id: Q2
     text: The system shall accept a long URL of up to 2000 characters.
     category: io
@@ -53,6 +52,15 @@ requirements:
     source: SRC1
     objective: O1
     specifies: [S]
+    threshold: 20 USD per month
+  - id: Q5
+    text: The system shall redirect a visitor who submits a short code to its long URL.
+    category: io
+    subcategory: functional
+    stage: release
+    parent: Q0
+    source: SRC1
+    specifies: [F1, I3, I4]
 functions:
   - {id: F0, name: Shorten and redirect}
   - {id: F1, name: Handle requests, parent: F0}
@@ -76,3 +84,4 @@ tests:
     description: "Submit a 2000-character URL: a short link comes back. Submit 2001 characters: refused with an error, nothing stored."
   - {id: T3, name: Availability probe, method: manual, verifies: [Q3]}
   - {id: T4, name: Monthly bill review, method: manual, verifies: [Q4]}
+  - {id: T6, name: Redirect end to end, method: automated, verifies: [Q5]}

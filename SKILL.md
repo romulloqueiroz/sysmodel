@@ -99,6 +99,7 @@ items and `specifies` links in step 2, `runs_in` and derived requirements in ste
 | `specifies` links to the system | 1 |
 | `specifies` links to functions and items | 2 |
 | `specifies` links to components | 4 |
+| `specifies` links to interfaces | 5 |
 | `functions` (all fields but `runs_in`) | 2, 4 |
 | `runs_in` | 4 |
 | `components` | 3, 4, 5 |

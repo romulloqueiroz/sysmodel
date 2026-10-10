@@ -86,7 +86,7 @@ def test_spec_for_a_leaf_part(tmp_path, capsys):
     assert "T3" not in tests and "T4" not in tests
     assert wholetests == ("\n| Test | Method | Proves |\n|---|---|---|\n| T3 Availability probe | manual | Q3 |\n"
                           "| T4 Monthly bill review | manual | Q4 |\n")
-    assert "| Q2 |\n\n- **T2** Submit a 2000-character URL" in tests and "- **T2**" not in wholetests
+    assert "| Q2 |\n| T6 Redirect end to end | automated | Q5 |\n\n- **T2** Submit a 2000-character URL" in tests and "- **T2**" not in wholetests
 
 
 def test_spec_lists_the_items_the_part_takes_or_gives(tmp_path, capsys):

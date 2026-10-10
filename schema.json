@@ -12,7 +12,7 @@
     },
     "system": {
       "description": "The system itself: root of the component tree.",
-      "type": "object", "required": ["id", "name"], "additionalProperties": false,
+      "type": "object", "required": ["id", "name", "purpose"], "additionalProperties": false,
       "properties": {"id": {"type": "string"}, "name": {"type": "string"}, "purpose": {"type": "string"}}
     },
     "stakeholders": {"type": "array", "items": {"$ref": "#/$defs/stakeholder"}},
@@ -80,7 +80,7 @@
         "parent": {"$ref": "#/$defs/id", "description": "Requirement group this belongs to"},
         "source": {"$ref": "#/$defs/id", "description": "Stakeholder source it comes from"},
         "derived_from": {"$ref": "#/$defs/ids", "description": "Higher-level requirements it is derived from"},
-        "specifies": {"$ref": "#/$defs/ids", "description": "Functions, items, components or the system it constrains"},
+        "specifies": {"$ref": "#/$defs/ids", "description": "Functions, items, components, interfaces or the system it constrains"},
         "objective": {"$ref": "#/$defs/id", "description": "Objective it comes from"},
         "threshold": {"type": "string", "description": "Minimum acceptable value, with units"}
       }
@@ -109,7 +109,7 @@
       "type": "object", "required": ["id", "between", "carries"], "additionalProperties": false,
       "properties": {"id": {"$ref": "#/$defs/id"}, "name": {"type": "string"},
                      "between": {"$ref": "#/$defs/ids", "minItems": 2, "maxItems": 2},
-                     "carries": {"$ref": "#/$defs/ids"}}
+                     "carries": {"$ref": "#/$defs/ids", "minItems": 1}}
     },
     "test": {
       "description": "How a requirement is proven.",
@@ -117,6 +117,7 @@
       "properties": {"id": {"$ref": "#/$defs/id"}, "name": {"type": "string"},
                      "method": {"enum": ["automated", "manual"]},
                      "verifies": {"$ref": "#/$defs/ids", "minItems": 1},
+                     "scenarios": {"$ref": "#/$defs/ids", "description": "Scenarios this test exercises"},
                      "description": {"type": "string", "description": "What the test does and expects: the setup or input, the action, and the expected result with values."}}
     }
   }

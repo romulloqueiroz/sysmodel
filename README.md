@@ -16,7 +16,7 @@ idea ──▶ AI drafts the design ──▶ you review & approve ──▶ bui
 
 - **One model, one source of truth.** The whole design lives in a single YAML file: requirements, jobs, parts, interfaces and tests, all linked. The pictures, the checks and the specs are all generated from it, so they can't drift apart.
 - **The AI asks; it doesn't invent.** Facts only you can know (users, budgets, thresholds, deadlines) are asked, never guessed or left as "TBD".
-- **Rules from the book, checked by machine.** 28 checks catch gaps before they become rework: a requirement nobody tests, a job with no part to run it, data crossing between parts with no interface.
+- **Rules from the book, checked by machine.** 34 checks catch gaps before they become rework: a requirement nobody tests, a job with no part to run it, data crossing between parts with no interface.
 - **People sign off where machines can't.** Each step ends in a review screen, where you approve it or send it back with a note. Change something later and the approval goes stale, so you see exactly what needs another look.
 - **Specs, not vibes.** When the design is approved, `spec` writes a build spec for each part: its scenarios, jobs, connections, requirements and the tests that prove them. That's everything a coding agent needs, and nothing it has to guess.
 

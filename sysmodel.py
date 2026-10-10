@@ -33,21 +33,25 @@ SUBCATS = {"io": ("input", "output", "external-interface", "functional"),
 REFS = [  # (kind, field, allowed target kinds)
     ("requirement", "parent", ("requirement",)), ("requirement", "source", ("source",)),
     ("requirement", "derived_from", ("requirement",)),
-    ("requirement", "specifies", ("function", "item", "component", "system")),
+    ("requirement", "specifies", ("function", "item", "component", "interface", "system")),
     ("requirement", "objective", ("objective",)), ("objective", "parent", ("objective",)),
     ("source", "stakeholder", ("stakeholder",)), ("function", "parent", ("function",)),
     ("function", "inputs", ("item",)), ("function", "outputs", ("item",)),
     ("function", "runs_in", ("component",)), ("component", "parent", ("component", "system")),
     ("external", "sends", ("item",)), ("external", "receives", ("item",)),
     ("interface", "between", ("component", "system", "external")), ("interface", "carries", ("item",)),
-    ("test", "verifies", ("requirement",))]
+    ("test", "verifies", ("requirement",)), ("test", "scenarios", ("scenario",))]
 JUDGMENT = [  # (id, step it starts at, book page, text)
     ("R12", 2, 102, "Each function's subfunctions partition its behavior: no overlaps, no gaps."),
     ("R13", 3, 102, "The component breakdown is a partition."),
     ("R19", 1, 48, "The external systems and items match the scenarios."),
     ("R27", 1, 58, "Each requirement is one testable statement: subject, shall, relation, "
                    "threshold with units; no 'and/or', no negatives."),
-    ("R28", 1, 141, "Trade-off requirements reflect stakeholder preferences (objectives).")]
+    ("R28", 1, 141, "Trade-off requirements reflect stakeholder preferences (objectives)."),
+    ("R31", 1, 138, "No requirement or the purpose names a solution (product, technology, hosting, a part) "
+                    "unless the engineer set it as a rule."),
+    ("R32", 1, 134, "The requirements can all be met together within the cost and date "
+                    "(the feasibility argument in decisions.md).")]
 SEVERITIES = ("error", "warning", "advice")
 
 # ---- model index and helpers -------------------------------------------------
@@ -177,8 +181,14 @@ def r05(c):
     for r in c.leafreqs:
         if r.get("category") == "io" and r.get("subcategory") in ("input", "output", "external-interface"):
             s = spec(r)
-            if not any(kind(c, x) == "item" for x in s) or not any(x in c.fleaf for x in s):
+            items, leaves = [x for x in s if kind(c, x) == "item"], [x for x in s if x in c.fleaf]
+            if not items or not leaves:
                 yield r["id"], "must specify at least one item and at least one leaf function"
+                continue
+            moved = {i for f in leaves for k in ("inputs", "outputs") for i in c.funcs[f].get(k) or []}
+            for i in items:
+                if i not in moved:
+                    yield r["id"], f"specifies {i}, which none of the leaf functions it specifies takes or gives"
 
 def r06(c):
     for r in c.leafreqs:
@@ -214,12 +224,30 @@ def r10(c):
         for i in e.get("receives") or []:
             if i not in c.fouts:
                 yield e["id"], f"receives {i}, which no leaf function produces as output"
+    sent = {i for e in c.m.get("external") or [] for i in e.get("sends") or []}
+    received = {i for e in c.m.get("external") or [] for i in e.get("receives") or []}
+    for f in sorted(c.fleaf):
+        for i in c.funcs[f].get("inputs") or []:
+            if i not in c.fouts and i not in sent:
+                yield f, f"takes {i}, which no leaf function gives and no outside system sends"
+        for i in c.funcs[f].get("outputs") or []:
+            if i not in c.fins and i not in received:
+                yield f, f"gives {i}, which no leaf function takes and no outside system receives"
 
 def r11(c):
     for nodes in (c.funcs, c.comps, c.reqs, c.objs):
         for i in nodes:
             if i in ancestors(nodes, i):
                 yield i, "parent chain loops back to itself"
+    for i in c.reqs:
+        seen, stack = set(), list(c.reqs[i].get("derived_from") or [])
+        while stack:
+            x = stack.pop()
+            if x not in seen:
+                seen.add(x)
+                stack += c.reqs.get(x, {}).get("derived_from") or []
+        if i in seen:
+            yield i, "derived_from chain loops back to itself"
 
 def r14(c):
     for i, f in c.funcs.items():
@@ -257,8 +285,16 @@ def r17(c):
 
 def r18(c):
     for e in c.m.get("external") or []:
-        if e["kind"] == "context" and e.get("receives"):
+        sends, receives = e.get("sends"), e.get("receives")
+        if e["kind"] == "context" and receives:
             yield e["id"], "context cannot be affected by the system, so it must not receive items"
+        if not sends and not receives:
+            yield e["id"], ("exchanges no items: an outside system is defined by what it sends or receives; "
+                            "if it only constrains requirements, make it a source; if it is a design choice, it belongs in step 3")
+        elif e["kind"] == "external" and not receives:
+            yield e["id"], "external receives no items: if the system does not affect it, make it context"
+        elif e["kind"] == "context" and not sends:
+            yield e["id"], "context sends no items: it matters only through what it sends into the system"
 
 def r20(c):
     for f in sorted(c.fleaf):
@@ -272,8 +308,9 @@ def r21(c):
 
 def r23(c):
     for r in c.leafreqs:
-        if r.get("category") == "system-wide" and r.get("subcategory") == "quality" and not r.get("threshold"):
-            yield r["id"], "quality requirement has no threshold"
+        if r.get("category") == "system-wide" and r.get("subcategory") in ("quality", "cost", "schedule") \
+                and not r.get("threshold"):
+            yield r["id"], f"{r['subcategory']} requirement has no threshold"
 
 def r24(c):
     for r in c.reqlist:
@@ -305,6 +342,8 @@ def reaches(c, x):
         return any(where(c, g) for g in leaves_under(c, x))
     if k == "item":
         return x in c.fins | c.fouts
+    if k == "interface":
+        return any(reaches(c, e) for e in c.by[x][1]["between"])
     return k in ("system", "component")
 
 def r30a(c):
@@ -348,6 +387,54 @@ def r30b(c):
             seen.add((p, q, item))
             yield item, f"(b) flow {p} -> {q} crosses a component boundary with no interface carrying it"
 
+def c01(c):
+    seen = set()
+    said = {x for r in c.leafreqs if r.get("category") == "io" for x in spec(r)}
+    for e in c.m.get("external") or []:
+        for i in (e.get("sends") or []) + (e.get("receives") or []):
+            if i not in said and i not in seen:
+                seen.add(i)
+                yield i, f"{e['id']} sends or receives it, but no io requirement specifies it"
+
+def c02(c):
+    named_by = {r.get("objective") for r in c.reqlist}
+    parents = {o.get("parent") for o in c.objs.values()}
+    for i in c.objs:
+        if i not in parents and i not in named_by:
+            yield i, "leaf objective that no requirement names in `objective`"
+
+def c03(c):
+    have = {r.get("subcategory") for r in c.leafreqs if r.get("category") == "qualification"}
+    for sub in SUBCATS["qualification"]:
+        if sub not in have:
+            yield c.sid, f"no {sub} requirement"
+
+def c04(c):
+    sibs = defaultdict(list)
+    for o in c.objs.values():
+        sibs[o.get("parent")].append(o)
+    for parent, os in sibs.items():
+        if all(o.get("weight") is not None for o in os):
+            total = sum(o["weight"] for o in os)
+            if abs(total - 1) > 0.01 + 1e-9:
+                where_ = f"under {parent}" if parent else "at the top"
+                yield parent or os[0]["id"], f"objective weights {where_} sum to {round(total, 4):g}, expected 1"
+
+def c05(c):
+    named_by = {s for t in c.m.get("tests") or [] for s in t.get("scenarios") or []}
+    for s in c.m.get("scenarios") or []:
+        if s["id"] not in named_by:
+            yield s["id"], "no test names this scenario"
+
+def c06(c):
+    made = {(p, q, i) for p, q, i in flows(c) if p and q and p != q}
+    for f in c.m.get("interfaces") or []:
+        a, b = f["between"]
+        for i in f["carries"]:
+            if not any(item == i and ((covers(c, a, p) and covers(c, b, q)) or (covers(c, a, q) and covers(c, b, p)))
+                       for p, q, item in made):
+                yield f["id"], f"carries {i}, which no flow between {a} and {b} exchanges"
+
 STEPS = {1: "Problem", 2: "Functions", 3: "Parts", 4: "Match", 5: "Interfaces", 6: "Test plan"}
 
 # id, step it starts at, severity, book page, short description, check function
@@ -364,22 +451,28 @@ RULES = [
     ("R07", 2, "error", 59, "io/functional requirement specifies root or first-level function", r07),
     ("R08", 2, "warning", 141, "root function has 2 to 7 children", r08),
     ("R09", 2, "error", 51, "exactly one root function", r09),
-    ("R10", 2, "error", 51, "external items match leaf function inputs/outputs", r10),
-    ("R11", 1, "error", 100, "no parent cycles", r11),
+    ("R10", 2, "error", 51, "external items match leaf function inputs/outputs, and the converse", r10),
+    ("R11", 1, "error", 100, "no parent or derived_from cycles", r11),
     ("R14", 4, "error", 243, "leaf functions run in leaf components, only they do", r14),
     ("R15", 4, "warning", 249, "a first-level function stays under one first-level component", r15),
     ("R16", 4, "warning", 243, "every leaf component has a function", r16),
     ("R17", 4, "advice", 214, "first-level functions and components map one-to-one", r17),
-    ("R18", 1, "error", 43, "context externals receive nothing", r18),
+    ("R18", 1, "error", 43, "every external exchanges items; context receives nothing, external receives some", r18),
     ("R20", 2, "warning", 58, "leaf function has done_when", r20),
     ("R21", 1, "error", 145, "leaf requirement traces to a source or higher requirement", r21),
-    ("R23", 1, "error", 138, "quality requirement has a threshold", r23),
+    ("R23", 1, "error", 138, "quality, cost and schedule requirements have a threshold", r23),
     ("R24", 1, "error", 145, "no TBD/TBR", r24),
     ("R25", 6, "error", 142, "io and system-wide requirements are tested", r25),
     ("R26", 1, "warning", 145, "requirement text says shall", r26),
     ("R29", 5, "error", 61, "interface endpoints differ and one is the system or a component", r29),
     ("R30", 4, "error", 57, "(a) io and system-wide requirements reach a component", r30a),
     ("R30", 5, "error", 57, "(b) cross-component flows are carried by an interface", r30b),
+    ("C01", 2, "warning", 59, "items an outside system exchanges are specified by an io requirement", c01),
+    ("C02", 1, "warning", 143, "every leaf objective is named by a requirement", c02),
+    ("C03", 1, "advice", 142, "every qualification subcategory has a requirement", c03),
+    ("C04", 1, "warning", 155, "sibling objective weights sum to 1", c04),
+    ("C05", 6, "warning", 56, "every scenario is named by a test", c05),
+    ("C06", 5, "warning", 48, "every item an interface carries flows between its ends", c06),
 ]
 
 # ---- running and output ------------------------------------------------------
@@ -457,6 +550,7 @@ OWNERS = [  # pieces of the model, and the steps whose approval covers each; SKI
     ("`specifies` links to the system", (1,)),
     ("`specifies` links to functions and items", (2,)),
     ("`specifies` links to components", (4,)),
+    ("`specifies` links to interfaces", (5,)),
     ("`functions` (all fields but `runs_in`)", (2, 4)),
     ("`runs_in`", (4,)),
     ("`components`", (3, 4, 5)),
@@ -476,6 +570,7 @@ def pieces(m):
             [i for i in g("items") if i["id"] in edge], [i for i in g("items") if i["id"] not in edge],
             [r for r in reqs if not r.get("derived_from")], [r for r in reqs if r.get("derived_from")],
             links({m["system"]["id"]}), links(ids("functions", "items")), links(ids("components")),
+            links(ids("interfaces")),
             [{k: v for k, v in f.items() if k != "runs_in"} for f in g("functions")],
             [[f["id"], f["runs_in"]] for f in g("functions") if f.get("runs_in")],
             g("components"), g("interfaces"), g("tests")]
@@ -606,6 +701,9 @@ def reach(c, r):
         k = kind(c, x)
         if k in ("system", "component"):
             out |= {l for l in c.cleaf if covers(c, x, l)}
+        elif k == "interface":
+            out |= {l for e in c.by[x][1]["between"] if kind(c, e) in ("system", "component")
+                    for l in c.cleaf if covers(c, e, l)}
         elif k == "function":
             out |= {where(c, g) for g in leaves_under(c, x)} - {None}
     return out
