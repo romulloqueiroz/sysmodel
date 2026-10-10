@@ -137,7 +137,7 @@ Only when `status` says all six steps are approved.
 ## Hand-off
 
 After each round, first write its content into `decisions.md` and start `wait`. Then tell the engineer in chat, in plain words and briefly;
-the full detail is in `decisions.md`:
+the review page shows the full detail, so point them there, never to the files:
 
 - what you added or changed, by step;
 - what you assumed, and the questions still open;
