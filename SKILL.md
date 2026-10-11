@@ -26,6 +26,9 @@ Run `python3 ${CLAUDE_SKILL_DIR}/sysmodel.py <command> <model>`:
 - `render`: a static HTML snapshot next to the model, for sharing. Read-only.
 - `spec <model> <component>`: the build spec for one part: its scenarios, jobs, connections, requirements and tests, taken from
   the model. It refuses until all six steps are approved.
+- `level <model> <component>`: starts the level for a part marked `subsystem: true`: writes its model, seeded from the approved
+  level above, to `<dir>/<component>/` and prints the part's `choice`. It refuses until every level above is fully approved and
+  free of L01, and when the part is not a subsystem or its level exists. Read [steps/levels.md](steps/levels.md) first.
 
 ## Files
 
@@ -43,12 +46,17 @@ Run `python3 ${CLAUDE_SKILL_DIR}/sysmodel.py <command> <model>`:
   guide says to "propose and ask first") are bullets under `### Waiting for your yes` in the step's section; the review page
   shows them at the top. When one is answered, move it to done or declined. Work deferred to a later step goes under
   `### For step N` in the deferring step's section. Open questions are only facts the engineer can't know yet. Unlike `answers.md` (the engineer's words only), this is the AI's record.
+- **Levels**: a part marked `subsystem: true` in step 3 is designed in its own model, one level down. A design is a tree:
+  `design/system.yaml` for the top, `design/C1/system.yaml` for subsystem C1 (same file name), `design/C1/C11/system.yaml` below that. Each level
+  has its own `decisions.md`, `answers.md`, `<name>.review.yaml` and `specs/` in its own folder, and its own six steps.
+  `serve` and `wait` take the top model. A level's ids are its own: prefix new ones with its system id (`C1.F1`). Small
+  splits stay in one model; mark a subsystem only as [steps/levels.md](steps/levels.md) says.
 - **Reviews**: `<model>.review.yaml` next to the model, written by `serve` when a person clicks Approve or Send back.
   Read it for the notes. **Never edit it.**
 
 ## The six steps
 
-Read the step's guide before working on it. Each says what the step fills in, what to do in the book's order, what to ask the engineer, and which checks apply.
+Read the step's guide before working on it; every level repeats the six steps. Each says what the step fills in, what to do in the book's order, what to ask the engineer, and which checks apply.
 
 | Step | Question | Guide |
 |---|---|---|
@@ -64,6 +72,8 @@ Read the step's guide before working on it. Each says what the step fills in, wh
 1. Run `status`. Work on the **Next** step when it is the AI's turn. When it waits for a person, say so, start `wait` in the background and stop; work
    ahead on a later step only if the engineer asks. When all six are approved, go to Building. If `status` says the review
    app is not running, start `serve` first.
+   With levels, `status` shows the tree: work on the level and the step it names, and read the child's model for that level. When a level
+   is approved and `status` says a subsystem needs its level, run `level` for it and start that level's step 1.
 2. Read that step's guide, then the model and `decisions.md`.
 3. Every review note, approved or sent back, is copied word for word into `answers.md` with the date, and acted on: an approval
    note can ask for changes too. If the step was sent back, the note is your task list. Handle every point in it; ask about any
@@ -124,15 +134,26 @@ which steps went stale. Which steps cover what:
 
 ## Building
 
-Only when `status` says all six steps are approved.
+Only when `status` says all six steps of a level are approved.
 
-1. Build the smallest parts first, one at a time. Before each, read `decisions.md` (steps 3-5) along with the spec, and save
-   the spec to `design/specs/<id>.md`. Run `spec` for the part and build what it says, with its tests.
-   Then join the parts and run the tests of the larger parts and the whole app (bottom-up, book p. 320).
-2. Put the test id in each test's name (`T2 long URL accepted`) so results trace back to the model.
-3. The spec is the contract. If building shows it is wrong or missing something, stop and propose the model change
+1. Build top-down by default, one level at a time (the book's alternative to bottom-up, pp. 289, 293-294). For the approved level:
+   build its smallest parts, and a **stub** for each subsystem from `spec` (a fake that honours the connections and items), then
+   run that level's tests. Then `level` for each subsystem and take it through its six steps (children may overlap with
+   building their parent), then build it the same way. A model with no subsystem is built as before: smallest parts first, then
+   the larger parts and the whole app.
+2. Each level's step 6 records in `decisions.md` its integration order and its stubs (Fig 1.20, p. 34; Table 11.2, p. 298). Build a
+   subsystem for real instead of stubbing it when it is reused, off-the-shelf or cheaper than a fake (p. 294). Say the risks of the
+   order you chose (Table 11.1, p. 294).
+3. Before running a level's tests, mark which of them mean anything against a stub. A test of a requirement whose jobs run in a
+   stubbed subsystem waits for the swap. Validation and acceptance count as passed only after every stub in the tree is swapped (p. 306).
+4. When a real subsystem replaces its stub, re-run the tests of every level above it up to the top (integration, Table 11.1,
+   p. 294). A fix re-runs the tests of the level that was fixed (regression, p. 290).
+5. Before building a part, read `decisions.md` (steps 3-5) along with the spec, and save the spec to `<level dir>/specs/<id>.md`.
+   Put the test id in each test's name (`T2 long URL accepted`) so results trace back to the model.
+6. The spec is the contract. If building shows it is wrong or missing something, stop and propose the model change
    (the book's change request, p. 321). It goes back through review; don't drift from it in code. A proposed model change
-   blocks `spec` until it is re-approved: keep building the unaffected parts from their saved specs meanwhile.
+   blocks `spec` until it is re-approved: keep building the unaffected parts from their saved specs meanwhile. A subsystem's change
+   request goes in its `decisions.md` under `## Change requests`, and you copy it to the level above (steps/levels.md).
 
 ## Hand-off
 

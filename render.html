@@ -58,6 +58,13 @@ h1, h2, h3, h4, p { margin: 0; }
 .top .mark { font: 1.05rem var(--hand); color: var(--accent); white-space: nowrap; }
 .top h1 { font: 1.5rem/1.1 var(--hand); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .top .purpose { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1; }
+.lvl { display: flex; gap: 4px; align-items: center; flex: none; max-width: 100%; flex-wrap: wrap; color: var(--muted); }
+.lvl:empty { display: none; }
+.lvl button { background: none; border: 0; padding: 1px 6px; border-radius: 6px; color: var(--accent); cursor: pointer; white-space: nowrap; }
+.lvl button:hover { background: var(--hover); }
+.lvl button.lvchip { background: var(--accent-bg); border-radius: 999px; padding: 2px 10px; font-size: .8rem; }
+.lvl button.lvchip:disabled { background: none; border: 1px dashed var(--line); color: var(--muted); cursor: default; }
+.lvl .you { font-weight: 700; }
 .pill { font-size: .8rem; border-radius: 999px; padding: 2px 10px; white-space: nowrap; }
 .pill.warn { background: var(--warn-bg); border: 1px solid var(--warn); }
 .pill.ok { background: var(--ok-bg); }
@@ -195,7 +202,7 @@ dl.facts dd { margin: 0; min-width: 0; display: flex; flex-wrap: wrap; gap: 4px;
   .app { display: flex; flex-direction: column; height: auto; min-height: 100%; }
   .top { flex-wrap: wrap; }
   .top .purpose { flex-basis: 100%; white-space: normal; }
-  .top .purpose, #status { order: 1; }            /* both panel buttons stay on the first row */
+  .top .purpose, #down, #status { order: 1; }            /* both panel buttons stay on the first row */
   .top h1 { flex: 1; min-width: 0; }
   .nav { border-right: 0; border-bottom: 1px solid var(--line); }
   .nav-in, .side-in { width: auto; height: auto; overflow: visible; }
@@ -220,9 +227,11 @@ dl.facts dd { margin: 0; min-width: 0; display: flex; flex-wrap: wrap; gap: 4px;
   <header class="top">
     <button class="iconbtn" id="tleft" aria-controls="nav" aria-expanded="true" aria-label="Steps panel"><svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><rect x="1.5" y="2.5" width="15" height="13" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M6.5 2.5v13" stroke="currentColor" stroke-width="1.5"/><rect class="fill" x="2.5" y="3.5" width="3.5" height="11" rx="1" fill="currentColor" opacity=".45"/></svg></button>
     <span class="mark">sysmodel</span>
+    <nav class="lvl" id="up" aria-label="Levels above"></nav>
     <h1 id="sysname"></h1>
     <button class="stepnow" id="stepnow" title="Show the steps panel"></button>
     <span class="purpose" id="purpose"></span>
+    <nav class="lvl" id="down" aria-label="Levels below"></nav>
     <span id="status"></span>
     <button class="iconbtn" id="tright" aria-controls="side" aria-expanded="true" aria-label="Details panel"><svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><rect x="1.5" y="2.5" width="15" height="13" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M11.5 2.5v13" stroke="currentColor" stroke-width="1.5"/><rect class="fill" x="12" y="3.5" width="3.5" height="11" rx="1" fill="currentColor" opacity=".45"/></svg></button>
   </header>
@@ -583,6 +592,8 @@ dl.facts dd { margin: 0; min-width: 0; display: flex; flex-wrap: wrap; gap: 4px;
 
   // ---------------- review: approve or send back each step (saving needs `sysmodel serve`) ----------------
   // Unsent notes and ticks live in sessionStorage, so a live reload or a step switch doesn't lose them.
+  const QS = "?level=" + encodeURIComponent(D.levels?.here || "");   // `serve` shows one level of a tree at a time
+  const goLevel = lv => { location.href = location.pathname + "?level=" + encodeURIComponent(lv); };
   const DRAFTS = "sysmodel.drafts:" + (D.drawable ? m.system.id : "");
   let drafts = {}, saving = false, restore = null;
   try { drafts = JSON.parse(sessionStorage.getItem(DRAFTS)) || {}; } catch (e) {}
@@ -605,14 +616,15 @@ dl.facts dd { margin: 0; min-width: 0; display: flex; flex-wrap: wrap; gap: 4px;
     if (decision === "sent back" && !dr.note.trim()) { say("Say what should change, then send it back."); $("review-note")?.focus(); return; }
     say("Saving…"); saving = true;
     try {
-      const res = await fetch("api/review", { method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ step: n, decision, note: dr.note, checked: dr.checked, fingerprint: D.review[n].fingerprint }) });
+      const res = await fetch("api/review" + QS, { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ level: D.levels?.here || "", step: n, decision, note: dr.note, checked: dr.checked, fingerprint: D.review[n].fingerprint }) });
       const out = await res.json();
       if (out.reload) { dr.msg = out.error + " Here is the latest version."; saveDrafts(); return reload(); }
       if (!res.ok) return say(out.error);
       D.review = out.review; D.live.version = out.version; if (out.progress) D.progress = out.progress;
+      if (out.levels) D.levels = out.levels;
       drafts[n] = { note: "", checked: dr.checked }; saveDrafts();
-      renderSteps(); renderSide();
+      renderTop(); renderSteps(); renderSide();
       $("side-in").querySelector(decision === "approved" ? ".review .primary" : ".review .secondary")?.focus();
       say("Saved. The AI picks this up by itself; if nothing happens in a couple of minutes, tell it in chat.");
     } catch (e) { say("Can't reach sysmodel serve. Is it still running?"); }
@@ -625,6 +637,13 @@ dl.facts dd { margin: 0; min-width: 0; display: flex; flex-wrap: wrap; gap: 4px;
     $("purpose").textContent = D.drawable ? (m.system.purpose || "") : "";
     $("purpose").title = $("purpose").textContent;
     const mine = D.findings.filter(f => f.step <= S.step && started(f.step)), fix = mine.filter(f => f.severity === "error").length, look = mine.filter(f => f.severity === "warning").length;
+    $("up").replaceChildren(...(D.levels?.crumbs || []).slice(0, -1).flatMap(c =>
+      [h("button", { onclick: () => goLevel(c.level), title: "Back up to this level" }, c.name), "›"]));
+    $("down").replaceChildren(...(D.levels?.children || []).map(k => {
+      const said = k.turn === "done" ? "approved" : k.turn === "person" ? `step ${k.step} · your turn` : k.turn === "ai" ? `step ${k.step} · AI working` : "no level yet";
+      return h("button", { class: "lvchip", disabled: !k.level, onclick: () => goLevel(k.level), title: k.level ? `Open the level of ${k.name}${k.why ? ": " + k.why : ""}` : `Run level for ${k.id} first` },
+        `${k.id} ${k.name || ""} · `, h("span", { class: k.turn === "person" ? "you" : "" }, said));
+    }));
     $("status").replaceChildren(fix + look ? h("span", { class: "pill warn" }, `${fix} to fix · ${look} to look at`) : h("span", { class: "pill ok" }, "Checks pass"));
   }
   function renderSteps() {
@@ -1191,7 +1210,7 @@ dl.facts dd { margin: 0; min-width: 0; display: flex; flex-wrap: wrap; gap: 4px;
   }
   if (D.live) setInterval(async () => {
     if (document.hidden || saving || document.activeElement?.matches("textarea, input[type=search]")) return;   // never reload under someone typing
-    try { if ((await (await fetch("api/version", { cache: "no-store" })).json()).version !== D.live.version) reload(); } catch (e) {}
+    try { if ((await (await fetch("api/version" + QS, { cache: "no-store" })).json()).version !== D.live.version) reload(); } catch (e) {}
   }, 1500);
 
   readHash();

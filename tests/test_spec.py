@@ -168,3 +168,21 @@ def test_spec_shows_the_scenarios_that_name_the_parts_items(tmp_path, capsys):
     out = build(model, "C11", capsys)                              # matched whatever the case: "long url"
     assert "### SC2 Marketer shortens a link" in out and "SC1" not in out
     assert "## Scenarios" not in build(model, "C2", capsys)       # the database's items are internal
+
+
+def test_spec_for_a_subsystem_is_a_stub_spec(tmp_path, capsys):
+    app = yaml.safe_load((HERE / "fixtures" / "levels" / "app.yaml").read_text())
+    plain = copy.deepcopy(app)
+    E(plain, "components", "C1").pop("subsystem")
+    out = build(approved(tmp_path, app), "C1", capsys)
+    assert "This part is a subsystem, designed at its own level: `C1/app.yaml`." in out
+    stub = under(out, "## Stub")
+    assert stub.startswith("\nBuild a stub, not the real part") and "honours the connections and items" in stub
+    assert "The jobs say the behaviour to fake" in stub and "Run them after the swap" in stub
+    assert out.index("## Stub") < out.index("## Jobs") and "### F11 Create short link" in out and "## Connections" in out
+    assert "These apply to the whole app, for reference." in out and "must not break" not in out
+    (tmp_path / "other").mkdir()
+    plain_out = build(approved(tmp_path / "other", plain), "C1", capsys)
+    assert "## Stub" not in plain_out and "designed at its own level" not in plain_out and "must not break them" in plain_out
+    assert build(approved(tmp_path, app), "C2", capsys).replace(str(tmp_path), "") == \
+        build(approved(tmp_path / "other", plain), "C2", capsys).replace(str(tmp_path / "other"), "")

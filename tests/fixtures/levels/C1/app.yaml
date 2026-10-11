@@ -1,0 +1,183 @@
+system:
+  id: C1
+  name: Web service
+  purpose: 'TBD: what Web service does for S URL shortener, in one sentence'
+sources:
+- id: UP
+  title: 'The level above: ../app.yaml'
+objectives:
+- id: C1.O0
+  name: Value of Web service
+- id: O1
+  name: Low running cost
+  parent: C1.O0
+scenarios:
+- id: SC1
+  name: Marketer shortens a link
+  steps:
+  - Web visitor sends Long URL
+  - System sends Short link to Web visitor
+external:
+- id: E1
+  name: Web visitor
+  kind: external
+  sends:
+  - I1
+  - I3
+  receives:
+  - I2
+  - I4
+- id: C2
+  name: Database
+  kind: external
+  sends:
+  - I6
+  receives:
+  - I5
+items:
+- id: I1
+  name: Long URL
+  description: 'The URL to shorten: an absolute http or https URL, 1 to 2000 characters.
+    Example: https://example.com/spring-sale?utm=mail'
+- id: I2
+  name: Short link
+- id: I3
+  name: Short code
+- id: I4
+  name: Redirect
+- id: I5
+  name: Link record
+  description: 'What is stored per link: code, target URL, created at.'
+- id: I6
+  name: Stored target
+requirements:
+- id: Q1
+  text: The system shall create a short link for a submitted long URL.
+  category: io
+  subcategory: functional
+  stage: release
+  source: UP
+  specifies:
+  - F1
+  - I2
+- id: Q2
+  text: The system shall accept a long URL of up to 2000 characters.
+  category: io
+  subcategory: input
+  stage: release
+  source: UP
+  specifies:
+  - I1
+  - F11
+- id: Q5
+  text: The system shall redirect a visitor who submits a short code to its long URL.
+  category: io
+  subcategory: functional
+  stage: release
+  source: UP
+  specifies:
+  - F1
+  - I3
+  - I4
+- id: Q6
+  text: The web service shall be available 99.95% of each month.
+  category: system-wide
+  subcategory: quality
+  stage: release
+  threshold: 99.95% monthly availability
+  source: UP
+  specifies:
+  - C1
+- id: Q7
+  text: The web service shall cost less than 12 USD per month to run.
+  category: system-wide
+  subcategory: cost
+  stage: release
+  objective: O1
+  threshold: 12 USD per month
+  source: UP
+  specifies:
+  - C1
+- id: Q8
+  text: The system shall serve every page over HTTPS.
+  category: system-wide
+  subcategory: technology
+  stage: release
+  source: UP
+  specifies:
+  - C1
+functions:
+- id: F1
+  name: Handle requests
+- id: F11
+  name: Create short link
+  parent: F1
+  inputs:
+  - I1
+  outputs:
+  - I2
+  - I5
+  done_when: Short link returned
+- id: F12
+  name: Redirect visitor
+  parent: F1
+  inputs:
+  - I3
+  - I6
+  outputs:
+  - I4
+  done_when: Visitor redirected
+interfaces:
+- id: IF1
+  name: Public HTTP
+  between:
+  - C1
+  - E1
+  carries:
+  - I1
+  - I2
+  - I3
+  - I4
+- id: IF2
+  name: Storage access
+  between:
+  - C1
+  - C2
+  carries:
+  - I5
+  - I6
+tests:
+- id: T1
+  name: Create link end to end
+  method: automated
+  verifies:
+  - Q1
+  scenarios:
+  - SC1
+- id: T2
+  name: Long URL accepted
+  method: automated
+  verifies:
+  - Q2
+  description: 'Submit a 2000-character URL: a short link comes back. Submit 2001
+    characters: refused.'
+- id: T3
+  name: Availability probe
+  method: manual
+  verifies:
+  - Q6
+- id: T4
+  name: Monthly bill review
+  method: manual
+  verifies:
+  - Q7
+- id: T5
+  name: HTTPS only
+  method: automated
+  verifies:
+  - Q8
+- id: T6
+  name: Redirect end to end
+  method: automated
+  verifies:
+  - Q5

@@ -12,7 +12,8 @@ import yaml
 HERE = Path(__file__).parent
 sys.path.insert(0, str(HERE.parent))
 import sysmodel  # noqa: E402
-from test_check import E, VALID, page_data  # noqa: E402
+from test_check import E, VALID, drop, page_data  # noqa: E402
+from test_levels import stale, tree  # noqa: E402
 
 
 def changed_steps(edit):
@@ -64,10 +65,8 @@ def test_cli_render_shows_saved_reviews(tmp_path):
     assert d["review"]["2"]["last"]["note"] == "split F1" and d["review"]["2"]["current"] and d["live"] is None
 
 
-@pytest.fixture
-def served(tmp_path):
-    model = tmp_path / "app.yaml"
-    model.write_text(yaml.safe_dump(VALID))
+def start(model):
+    """Serve model on a free port; returns (server, call) where call(method, path, body, headers) gives (status, content type, data)."""
     srv = sysmodel.make_server(model, port=0)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     port = srv.server_address[1]
@@ -81,6 +80,14 @@ def served(tmp_path):
         c.close()
         return r.status, r.getheader("Content-Type"), data
 
+    return srv, call
+
+
+@pytest.fixture
+def served(tmp_path):
+    model = tmp_path / "app.yaml"
+    model.write_text(yaml.safe_dump(VALID))
+    srv, call = start(model)
     yield model, call
     srv.shutdown()
     srv.server_close()
@@ -337,3 +344,88 @@ def test_page_data_carries_progress(tmp_path):
     assert sysmodel.main(["render", str(src)]) == 0
     rows = page_data((tmp_path / "app.html").read_text())["progress"]
     assert [r["step"] for r in rows] == [1, 2, 3, 4, 5, 6] and {"name", "turn", "why", "errors", "warnings"} <= rows[0].keys()
+
+
+@pytest.fixture
+def served_tree(tmp_path):
+    """The two-level fixture tree, the top level approved, served from its root: (top, child, call)."""
+    top, kid = tree(tmp_path)
+    srv, call = start(top)
+    yield top, kid, call
+    srv.shutdown()
+    srv.server_close()
+
+
+def test_serve_shows_each_level_of_the_tree(served_tree):
+    top, kid, call = served_tree
+    root = page_data(call("GET", "/")[2].decode())
+    assert root["model"]["system"]["id"] != "C1" and root["levels"]["here"] == "" and len(root["levels"]["crumbs"]) == 1
+    assert root["levels"]["children"] == [dict(id="C1", name=root["levels"]["children"][0]["name"], level="C1", step=1, step_name="Problem",
+                                               turn="person", why="ready for review")]
+    assert page_data(call("GET", "/?level=")[2].decode())["model"] == root["model"]
+    d = page_data(call("GET", "/?level=C1")[2].decode())
+    assert d["model"]["system"]["id"] == "C1" and d["levels"]["here"] == "C1" and d["levels"]["children"] == []
+    assert [c["level"] for c in d["levels"]["crumbs"]] == ["", "C1"] and d["review"]["1"]["last"] is None and d["live"]["version"]
+    m = yaml.safe_load(kid.read_text())
+    drop(m, "items", "I4")
+    kid.write_text(yaml.safe_dump(m, sort_keys=False))
+    assert any(f["rule"] == "L01" for f in page_data(call("GET", "/?level=C1")[2].decode())["findings"])   # the page checks against the level above
+
+
+def test_serve_knows_only_the_levels_of_the_tree(served_tree):
+    top, kid, call = served_tree
+    for level in ("C2", "C1/C1", "..", "%2e%2e/C1"):
+        assert call("GET", f"/?level={level}")[0] == 404 and call("GET", f"/api/version?level={level}")[0] == 404
+        assert call("POST", f"/api/review?level={level}", {"step": 1, "decision": "sent back", "note": "x"})[0] == 404
+    assert call("POST", "/api/review", {"level": ["C1"], "step": 1, "decision": "sent back", "note": "x"})[0] == 404
+    assert not sysmodel.review_path(kid).exists()
+
+
+def test_serve_saves_a_decision_in_the_level_it_names(served_tree):
+    top, kid, call = served_tree
+    root_reviews = sysmodel.review_path(top).read_text()
+    fp = sysmodel.fingerprint(yaml.safe_load(kid.read_text()), 1)
+    status, _, out = call("POST", "/api/review?level=C1", {"level": "C1", "step": 1, "decision": "approved", "fingerprint": fp})
+    out = json.loads(out)
+    assert status == 200 and out["progress"][0]["turn"] == "done" and out["levels"]["here"] == "C1"
+    assert sysmodel.load_reviews(sysmodel.review_path(kid))[1]["decision"] == "approved"
+    assert sysmodel.review_path(top).read_text() == root_reviews
+    # the query alone picks the level too; the body wins when both name one
+    fp2 = sysmodel.fingerprint(yaml.safe_load(kid.read_text()), 2)
+    status, _, out = call("POST", "/api/review?level=C1", {"step": 2, "decision": "sent back", "note": "split it", "fingerprint": fp2})
+    assert status == 200 and sysmodel.load_reviews(sysmodel.review_path(kid))[2]["note"] == "split it"
+    fp0 = sysmodel.fingerprint(yaml.safe_load(top.read_text()), 1)
+    status, _, out = call("POST", "/api/review?level=C1", {"level": "", "step": 1, "decision": "sent back", "note": "root", "fingerprint": fp0})
+    assert status == 200 and sysmodel.load_reviews(sysmodel.review_path(top))[1]["note"] == "root"
+
+
+def test_serve_refuses_a_level_while_the_level_above_is_stale(served_tree):
+    top, kid, call = served_tree
+    stale(top)
+    fp = sysmodel.fingerprint(yaml.safe_load(kid.read_text()), 1)
+    status, _, out = call("POST", "/api/review?level=C1", {"step": 1, "decision": "approved", "fingerprint": fp})
+    assert status == 409 and "level above isn't approved" in json.loads(out)["error"] and not sysmodel.review_path(kid).exists()
+    d = page_data(call("GET", "/")[2].decode())["levels"]["children"][0]
+    assert (d["turn"], d["why"]) == ("ai", "the level above is not approved")
+
+
+def test_serve_version_follows_every_level(served_tree):
+    top, kid, call = served_tree
+    version = lambda: json.loads(call("GET", "/api/version?level=C1")[2])["version"]
+    seen = [version()]
+    for f in (kid, sysmodel.review_path(kid), kid.with_name("decisions.md")):
+        f.write_text(f.read_text() + "\n" if f.exists() else "## Step 1 Problem\nhi\n")
+        seen.append(version())
+    assert len(set(seen)) == len(seen)
+    assert json.loads(call("GET", "/api/version")[2])["version"] == seen[-1]       # one version for the tree, whatever the level
+
+
+def test_serve_of_a_level_opens_on_that_level(served_tree):
+    top, kid, call = served_tree
+    srv, kid_call = start(kid)
+    try:
+        assert page_data(kid_call("GET", "/")[2].decode())["levels"]["here"] == "C1"
+        assert page_data(kid_call("GET", "/?level=")[2].decode())["levels"]["here"] == ""
+    finally:
+        srv.shutdown()
+        srv.server_close()

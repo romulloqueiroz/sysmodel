@@ -2,6 +2,7 @@
 """sysmodel: check a system model YAML against schema.json and book rules, render it as a review page,
 or serve that page so people can approve each step."""
 import argparse
+import copy
 import errno
 import getpass
 import hashlib
@@ -19,7 +20,7 @@ from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from types import SimpleNamespace
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 sys.path.insert(0, str(Path(__file__).resolve().with_name("vendor")))  # bundled PyYAML: nothing to install
 import yaml  # noqa: E402
@@ -62,8 +63,9 @@ def table(m, key):
         d.setdefault(el["id"], el)
     return d
 
-def index(m):
-    c = SimpleNamespace(m=m, sid=m["system"]["id"])
+def index(m, up=None):
+    """up: the level above, for a model that is a subsystem part's own level (its system id is that part's id)."""
+    c = SimpleNamespace(m=m, sid=m["system"]["id"], up=up)
     c.all = [("system", m["system"])] + [(k, el) for key, k in KINDS.items() for el in m.get(key) or []]
     c.by = {}
     for k, el in c.all:
@@ -313,6 +315,8 @@ def r23(c):
             yield r["id"], f"a {r['subcategory']} requirement needs a `threshold` (a number with units)"
 
 def r24(c):
+    if re.search(r"\b(TBD|TBR)\b", c.m["system"].get("purpose") or "", re.I):
+        yield c.sid, "`purpose` still says TBD or TBR; write the real purpose"
     for r in c.reqlist:
         for field in ("text", "threshold"):
             if re.search(r"\b(TBD|TBR)\b", r.get(field) or "", re.I):
@@ -406,7 +410,7 @@ def c02(c):
 def c03(c):
     have = {r.get("subcategory") for r in c.leafreqs if r.get("category") == "qualification"}
     for sub in SUBCATS["qualification"]:
-        if sub not in have:
+        if sub not in have and not (c.up and sub in ("validation-plan", "acceptance-plan")):  # the whole app's (p. 255)
             yield c.sid, f"there is no {sub} requirement"
 
 def c04(c):
@@ -434,6 +438,80 @@ def c06(c):
             if not any(item == i and ((covers(c, a, p) and covers(c, b, q)) or (covers(c, a, q) and covers(c, b, p)))
                        for p, q, item in made):
                 yield f["id"], f"carries {i}, but nothing goes between {a} and {b}; remove it from `carries`"
+
+# ---- levels: a subsystem part designed in its own model ----------------------
+
+def drift(mine, theirs, fields, key):
+    """L01 findings for one frozen element: missing here, or a field that differs from the level above."""
+    if mine is None:
+        yield theirs["id"], f"is in the level above but missing here; add it back to `{key}`"
+        return
+    say = lambda v: "not set" if v is None else repr(v)
+    for k in fields:
+        if mine.get(k) != theirs.get(k):
+            yield theirs["id"], f"`{k}` is {say(mine.get(k))} here but {say(theirs.get(k))} in the level above"
+
+def moved(mine, theirs, field, verb):
+    for i in [x for x in mine.get(field) or [] if x not in (theirs.get(field) or [])]:
+        yield theirs["id"], f"{field} {i}, the level above does not"
+    for i in [x for x in theirs.get(field) or [] if x not in (mine.get(field) or [])]:
+        yield theirs["id"], f"does not {verb} {i}, the level above does"
+
+def l01(c):
+    if c.up is None:
+        return
+    if {f["rule"] for f in check_model(c.up, 1)} & {"S01", "S02", "S03", "R11"}:
+        yield c.sid, "the level above has must-fix problems in its structure, so this level can't be compared with it; run check on it"
+        return
+    want = contract(c.up, c.sid)
+    ext, items = table(c.m, "external"), table(c.m, "items")
+    for e in want.get("external") or []:
+        yield from drift(ext.get(e["id"]), e, (), "external")
+        if e["id"] in ext:
+            yield from moved(ext[e["id"]], e, "sends", "send")
+            yield from moved(ext[e["id"]], e, "receives", "receive")
+    for i in [i for i in ext if i not in {e["id"] for e in want.get("external") or []}]:
+        yield i, "the level above does not connect this part to it; the boundary is set there, so send a change request"
+    edge = {i for e in want.get("external") or [] for i in (e.get("sends") or []) + (e.get("receives") or [])}
+    for x in want.get("items") or []:
+        if x["id"] in edge:
+            yield from drift(items.get(x["id"]), x, ("name", "description"), "items")
+    for r in want["requirements"]:
+        yield from drift(c.reqs.get(r["id"]), r, ("text", "category", "subcategory", "stage", "threshold", "objective"), "requirements")
+    for o in want.get("objectives") or []:
+        if o["id"] != f"{c.sid}.O0":
+            yield from drift(c.objs.get(o["id"]), o, ("name",), "objectives")
+    ifs = table(c.m, "interfaces")
+    for x in want.get("interfaces") or []:
+        yield from drift(ifs.get(x["id"]), x, (), "interfaces")
+        if x["id"] in ifs:
+            mine, far = ifs[x["id"]], x["between"][1]
+            if far not in mine["between"] or not any(kind(c, e) in ("system", "component") for e in mine["between"] if e != far):
+                yield x["id"], f"`between` should join {far} to {c.sid} or one of its parts, as in the level above"
+            yield from moved(mine, x, "carries", "carry")
+
+def l02(c):
+    for i, x in c.comps.items():
+        if x.get("subsystem") and i not in c.cleaf:
+            yield i, "is a subsystem, designed at its own level, so it can't be split into parts here; remove its parts or `subsystem`"
+
+def shared_by(c, r, sub):
+    """Whether a requirement derived from r, and not about the whole app, reaches a part in sub: r has a share there."""
+    return any(r["id"] in (d.get("derived_from") or []) and c.sid not in spec(d) and reach(c, d) & sub for d in c.leafreqs)
+
+def l03(c):
+    budgets = [r for r in c.leafreqs if r.get("category") == "system-wide" and r.get("subcategory") in ("quality", "cost", "schedule")]
+    for p, x in c.comps.items():   # a budget on the app or on a part above p is apportioned again for p
+        up, sub = set(ancestors(c.comps, p)), {l for l in c.cleaf if covers(c, p, l)}
+        for r in [r for r in budgets if (c.sid in spec(r) and not r.get("derived_from")) or up & set(spec(r))] if x.get("subsystem") else []:
+            if not shared_by(c, r, sub):
+                yield p, f"has no share of {r['id']}; derive a requirement from {r['id']} that reaches this part"
+
+def l04(c):
+    for p, x in c.comps.items():
+        for f in [f for f in c.funcs if f not in c.fleaf and f not in c.roots] if x.get("subsystem") else []:
+            if {covers(c, p, w) for g in leaves_under(c, f) if (w := where(c, g))} == {True, False}:
+                yield f, f"its smallest jobs run both in subsystem {p} and outside it; a subsystem should own whole jobs"
 
 STEPS = {1: "Problem", 2: "Functions", 3: "Parts", 4: "Match", 5: "Interfaces", 6: "Test plan"}
 
@@ -473,6 +551,10 @@ RULES = [
     ("C04", 1, "warning", 155, "objective weights at the same level add up to 1", c04),
     ("C05", 6, "warning", 56, "every scenario is named by a test", c05),
     ("C06", 5, "warning", 48, "every item an interface carries really passes between its ends", c06),
+    ("L01", 1, "error", 321, "a level keeps what the level above set: its boundary, requirements, objectives and interfaces", l01),
+    ("L02", 3, "error", 321, "a subsystem part is a smallest part", l02),
+    ("L03", 4, "warning", 251, "a subsystem part has its share of each system-wide quality, cost and schedule requirement", l03),
+    ("L04", 4, "warning", 322, "a job split into smaller jobs runs wholly inside a subsystem part or wholly outside it", l04),
 ]
 
 # ---- running and output ------------------------------------------------------
@@ -486,7 +568,8 @@ def label(c, i):
 
 JSON_TYPES = {"object": lambda x: isinstance(x, dict), "array": lambda x: isinstance(x, list),
               "string": lambda x: isinstance(x, str),
-              "number": lambda x: isinstance(x, (int, float)) and not isinstance(x, bool)}
+              "number": lambda x: isinstance(x, (int, float)) and not isinstance(x, bool),
+              "boolean": lambda x: isinstance(x, bool)}
 
 def schema_errors(x, s, defs, path=()):
     """(path, message) for each way x breaks schema s. Only the JSON Schema keywords schema.json uses."""
@@ -520,14 +603,14 @@ def schema_errors(x, s, defs, path=()):
             if k in props:
                 yield from schema_errors(v, props[k], defs, path + (k,))
 
-def check_model(m, step=6):
-    """Findings for the rules of steps 1..step."""
+def check_model(m, step=6, up=None):
+    """Findings for the rules of steps 1..step. up: the level above (see parent_of)."""
     schema = json.loads(Path(__file__).with_name("schema.json").read_text())
     errs = sorted(schema_errors(m, schema, schema["$defs"]), key=lambda e: [str(p) for p in e[0]])
     if errs:
         return [dict(rule="S01", step=1, severity="error", page=None, message=msg, label=el, element=el)
                 for path, msg in errs for el in ["/".join(map(str, path)) or "(file)"]]
-    c = index(m)
+    c = index(m, up)
     out = []
     for rule, st, sev, page, _, fn in RULES[1:]:
         if st > step:
@@ -616,8 +699,8 @@ def write_state(model, **changes):
         pass
 
 def serve_alive(model):
-    """The recorded `serve` entry if its process still runs, else None."""
-    s = read_state(model).get("serve")
+    """The recorded `serve` entry (kept for the root of the levels) if its process still runs, else None."""
+    s = read_state(root_of(model)).get("serve")
     try:
         os.kill(int(s["pid"]), 0)
         return s
@@ -626,6 +709,49 @@ def serve_alive(model):
 
 def review_path(model):
     return Path(model).with_suffix(".review.yaml")
+
+def parent_of(model):
+    """The model of the level above: D/C1/<name> is C1's level of D/<name> when C1 is a subsystem part there and the
+    model's system id is C1. None for a root."""
+    model = Path(model)
+    up = model.resolve().parent.parent / model.name
+    try:
+        x = table(yaml.safe_load(up.read_text()), "components").get(model.resolve().parent.name)
+        ok = x and x.get("subsystem") is True and yaml.safe_load(model.read_text())["system"]["id"] == x["id"]
+    except (OSError, yaml.YAMLError, KeyError, TypeError, AttributeError):
+        return None
+    return up if ok else None
+
+def root_of(model):
+    while (up := parent_of(model)):
+        model = up
+    return Path(model)
+
+def levels_above(model):
+    """The models of the levels above, nearest first."""
+    out, up = [], parent_of(model)
+    while up:
+        out.append(up)
+        up = parent_of(up)
+    return out
+
+def level_files(root):
+    """{level: model file} for root ("") and every level below it ("C1", "C1/C11")."""
+    out = {"": Path(root)}
+    try:
+        comps = table(yaml.safe_load(Path(root).read_text()), "components")
+    except (OSError, yaml.YAMLError, AttributeError):
+        return out
+    for i, x in comps.items():
+        f = Path(root).parent / i / Path(root).name
+        if x.get("subsystem") is True and parent_of(f):
+            out.update({f"{i}/{k}".rstrip("/"): v for k, v in level_files(f).items()})
+    return out
+
+def load_up(model):
+    """The level above model, loaded, or None."""
+    up = parent_of(model)
+    return yaml.safe_load(up.read_text()) if up else None
 
 def load_reviews(path):
     """Latest decision per step, from the review file next to the model."""
@@ -652,46 +778,61 @@ def read_answers(model):
     f = Path(model).with_name("answers.md")
     return f.read_text() if f.is_file() else None
 
-def render(m, step=6, decisions=None, live=None, notes=None, model=None):
+def render(m, step=6, decisions=None, live=None, notes=None, model=None, levels=None):
     """Self-contained HTML review page for steps 1..step (pictures drawn in the browser).
-    decisions: from load_reviews. notes: text of decisions.md. model: path of the model file (for the AI's hand-off record). live: {"version": ...} when `serve` hands the page out, so it can save decisions."""
-    found = check_model(m, step)
+    decisions: from load_reviews. notes: text of decisions.md. model: path of the model file (for the AI's hand-off record). live: {"version": ...} when `serve` hands the page out, so it can save decisions. levels: from levels_info, when `serve` hands out a tree."""
+    found = check_model(m, step, load_up(model) if model else None)
     drawable = not any(f["rule"] == "S01" for f in found)
     data = {"model": m, "step": step, "steps": STEPS, "findings": found, "drawable": drawable,
             "judgment": [{"rule": r, "step": st, "text": t, "page": pg} for r, st, pg, t in JUDGMENT if st <= step],
-            "review": review_state(m, decisions or {}, step) if drawable else {}, "live": live, "notes": notes, "answers": read_answers(model) if model else None,
+            "review": review_state(m, decisions or {}, step) if drawable else {}, "live": live, "levels": levels, "notes": notes, "answers": read_answers(model) if model else None,
             "progress": progress(m, decisions or {}, model) if drawable else []}
     blob = json.dumps(data, ensure_ascii=False, default=str).replace("</", "<\\/")
     return Path(__file__).with_name("render.html").read_text().replace("/*DATA*/null", blob)
 
 def wait_for_review(model, every=1.0):
-    """Block until a person approves or sends back a step in `serve`; returns {step: decision} for what changed."""
-    path = review_path(model)
-    before = load_reviews(path)
-    try:
-        m = yaml.safe_load(Path(model).read_text())
-        write_state(model, handoff={str(r["step"]): fingerprint(m, r["step"]) for r in progress(m, before) if r["turn"] == "person"})
-    except (OSError, yaml.YAMLError, KeyError, TypeError, AttributeError):
-        pass
+    """Block until a person approves or sends back a step in `serve`, at any level under the same root;
+    returns {(level, step): decision} for what changed (level "" is the root)."""
+    root = root_of(model)
+    seen = lambda: {(lv, n): d for lv, f in level_files(root).items() for n, d in load_reviews(review_path(f)).items()}
+    before = seen()
+    for f in level_files(root).values():
+        try:
+            m = yaml.safe_load(f.read_text())
+            rows = progress(m, load_reviews(review_path(f)), f, raw=True)
+            first = next((r["step"] for r in rows if r["turn"] != "done"), 0)   # later steps stay the AI's until a later wait
+            write_state(f, handoff={str(r["step"]): fingerprint(m, r["step"]) for r in rows if r["turn"] == "person" and r["step"] <= first})
+        except (OSError, yaml.YAMLError, KeyError, TypeError, AttributeError):
+            pass
     while True:
         time.sleep(every)
-        changed = {n: d for n, d in load_reviews(path).items() if d != before.get(n)}
+        now = seen()
+        changed = {k: d for k, d in now.items() if d != before.get(k)}
         if changed:
             return changed
         if not serve_alive(model):
             return None
+
+def blocked(model):
+    """Whether any level above model is not fully approved (and clean of L01)."""
+    return any(r["turn"] != "done" for a in levels_above(model)
+               for r in progress(yaml.safe_load(a.read_text()), load_reviews(review_path(a)), a, raw=True))
 
 STARTED = {  # does the model have anything for this step yet?
     1: lambda m: m.get("requirements"), 2: lambda m: m.get("functions"), 3: lambda m: m.get("components"),
     4: lambda m: any(f.get("runs_in") for f in m.get("functions") or []),
     5: lambda m: m.get("interfaces"), 6: lambda m: m.get("tests")}
 
-def progress(m, decisions, model=None):
+def progress(m, decisions, model=None, raw=False):
     """Whose turn each step is: done (approved, unchanged since, nothing to fix), ai (not started, must-fix problems, or sent back),
     or person (waiting for a review in `serve`). With a model path and a hand-off record (from `wait`), a step the AI changed since
-    the hand-off is still the AI's."""
-    handoff = read_state(model).get("handoff") if model else None
-    found = check_model(m)
+    the hand-off is still the AI's. A level also waits for the one above it: nothing is up for review until every level above is
+    done (which includes being free of L01). raw: leave out the hand-off and the level above (what `wait` records as handed over)."""
+    handoff = read_state(model).get("handoff") if model and not raw else None
+    above = levels_above(model) if model else []
+    pm = yaml.safe_load(above[0].read_text()) if above else None
+    held = bool(model) and not raw and blocked(model)
+    found = check_model(m, up=pm)
     if any(f["rule"] == "S01" for f in found):
         return [dict(step=n, name=STEPS[n], turn="ai", why="the file doesn't match schema.json (run check)",
                      errors=0, warnings=0) for n in STEPS]
@@ -715,10 +856,36 @@ def progress(m, decisions, model=None):
             turn, why = "person", f"changed since sent back by {who}: review again"
         else:
             turn, why = "person", "ready for review"
+        if turn == "person" and held:
+            turn, why = "ai", "the level above is not approved"
         if turn == "person" and isinstance(handoff, dict) and handoff.get(str(n)) != r["fingerprint"]:
             turn, why = "ai", "the AI is still working on it"
         rows.append(dict(step=n, name=STEPS[n], turn=turn, why=why, errors=errors, warnings=warnings))
     return rows
+
+def level_now(f):
+    """A level's model and its first step that is not done (None: all six approved)."""
+    cm = yaml.safe_load(f.read_text())
+    return cm, next((r for r in progress(cm, load_reviews(review_path(f)), f) if r["turn"] != "done"), None)
+
+def level_lines(m, model, depth=1):
+    """Status lines for the levels below a model: each one's current step and turn, its L01 differences from this model,
+    and the subsystem parts that have no level yet."""
+    out, pad = [], "  " * depth
+    for i, x in table(m, "components").items():
+        f = model.parent / i / model.name
+        if x.get("subsystem") is not True:
+            continue
+        if not parent_of(f):
+            out.append(f"{pad}{i} needs its level: run level {model} {i}" if not f.exists() else
+                       f"{pad}{i}: {f} isn't its level (its system id must be {i}); move or fix it")
+            continue
+        cm, nxt = level_now(f)
+        said = f"step {nxt['step']} {nxt['name']}, " + ("the AI's turn" if nxt["turn"] == "ai" else "waiting for a person") + f" ({nxt['why']})" if nxt else "all six steps approved"
+        drift = sum(r["rule"] == "L01" for r in check_model(cm, 1, m))
+        out.append(f"{pad}{i} {x['name']}: {said}" + (f"; {drift} L01 findings, it has drifted from this level" if drift else ""))
+        out += level_lines(cm, f, depth + 1)
+    return out
 
 # ---- build spec for one part -------------------------------------------------
 
@@ -795,11 +962,103 @@ def req_lines(c, r, shared=()):  # every spec is of an approved model, so "to co
     got = [f"{k}: {v}" for k, v in fields if v]
     return [f"- **{r['id']}**{cat} {r['text']}"] + (["  " + " · ".join(got)] if got else [])
 
+def own_reqs(c, comp):
+    """The requirements that reach part comp, each with the other smallest parts it reaches; and the whole-app ones."""
+    subleaf = c.cleaf & set(comps_under(c, comp))
+    own, whole = [], []
+    for r in c.leafreqs:
+        got = reach(c, r)
+        if c.sid in spec(r) or not spec(r):
+            whole.append(r)
+        elif got & subleaf:
+            own.append((r, got - subleaf))
+    return own, whole
+
+def mentions(m, names):
+    """The scenarios with a step that says one of names (R19 keeps the words in step with the items)."""
+    said = lambda step: any(re.search(rf"(?<!\w){re.escape(n)}(?!\w)", step, re.I) for n in names)
+    return [s for s in m.get("scenarios") or [] if any(said(x) for x in s["steps"])]
+
+def contract(pm, comp, origin="the level above"):
+    """The model that subsystem part comp of model pm starts its own level from. L01 holds that level to the frozen
+    parts: what each outside system sends and receives, the boundary items, the inherited requirements, the objectives'
+    ids and names, and the interfaces. The rest is a seed to edit. origin: the level above's file, for the source UP."""
+    c = index(pm)
+    sub, name = set(comps_under(c, comp)), c.comps[comp]["name"]
+    # a part outside comp is seen as its biggest part that does not hold comp
+    roll = lambda x: next(a for a in reversed([x] + ancestors(c.comps, x)) if comp not in comps_under(c, a)) if x in c.comps else x
+    cells, ends, links = connections(c, sub), defaultdict(lambda: ([], [])), {}
+    for (i, far), (ins, outs) in cells.items():
+        ends[roll(far)][0].extend(ins)
+        ends[roll(far)][1].extend(outs)
+        if i:
+            links.setdefault(i, (roll(far), set()))[1].update(ins + outs)
+    ext = []
+    for x in in_order(c, ends):
+        sends, receives = in_order(c, ends[x][0]), in_order(c, ends[x][1])
+        k = "enabling" if c.by[x][1].get("kind") == "enabling" else "external" if receives else "context"   # R18
+        ext.append({"id": x, "name": c.by[x][1]["name"], "kind": k, **({"sends": sends} if sends else {}),
+                    **({"receives": receives} if receives else {})})
+    own, whole = own_reqs(c, comp)
+    shared = lambda r: shared_by(c, r, sub)
+    ids = {r["id"] for r, _ in own if r.get("subcategory") not in ("validation-plan", "acceptance-plan")}   # p. 255
+    ids |= {r["id"] for r in whole if r.get("category") == "system-wide" and c.sid in spec(r) and not shared(r)   # p. 252
+            and r.get("subcategory") not in ("quality", "cost", "schedule")}   # budgets are apportioned, not copied (p. 251)
+    ids -= {r["id"] for r, _ in own if r.get("category") == "system-wide" and r.get("subcategory") in ("quality", "cost", "schedule")
+            and set(ancestors(c.comps, comp)) & set(spec(r))}   # a budget on a part above comp is apportioned again for comp
+    inside = lambda f: bool(leaves_under(c, f)) and all(where(c, g) in sub for g in leaves_under(c, f))
+    tops = [f for f, x in c.funcs.items() if inside(f) and not (x.get("parent") in c.funcs and inside(x["parent"]))]
+    funcs = [{k: v for k, v in x.items() if k != "runs_in"} for f, x in c.funcs.items()
+             if f in tops or set(ancestors(c.funcs, f)) & set(tops)]
+    for x in funcs:   # one top job is the root; several go under a new one
+        if x["id"] in tops and len(tops) > 1:
+            x["parent"] = f"{comp}.F0"
+        elif x["id"] in tops:
+            x.pop("parent", None)
+    funcs = ([{"id": f"{comp}.F0", "name": name}] if len(tops) > 1 else []) + funcs
+    kept = {x["id"] for x in funcs}
+    def respec(x):
+        k = kind(c, x)
+        if k in ("system", "component"):
+            return [comp]
+        if k == "function" and x not in kept:
+            return [g for g in leaves_under(c, x) if g in kept]
+        return [x] if k in ("function", "item") or x in links else []
+    reqs = []
+    for r in c.leafreqs:
+        if r["id"] in ids:
+            s = list(dict.fromkeys(y for x in spec(r) for y in respec(x)))
+            reqs.append({**{k: v for k, v in r.items() if k not in ("parent", "derived_from", "specifies")}, "source": "UP",
+                         **({"specifies": s} if s else {})})
+    valued = {r.get("objective") for r in reqs + [r for r in c.leafreqs if r.get("subcategory") in ("cost", "schedule", "quality")]
+              if r.get("objective")}
+    objs = [{"id": o["id"], "name": o["name"], "parent": o["parent"] if o.get("parent") in valued else f"{comp}.O0"}
+            for o in pm.get("objectives") or [] if o["id"] in valued]
+    objs = ([{"id": f"{comp}.O0", "name": f"Value of {name}"}] if objs else []) + objs
+    ifs = [{**{k: v for k, v in c.by[i][1].items() if k in ("id", "name")}, "between": [comp, links[i][0]],
+            "carries": [x for x in c.by[i][1]["carries"] if x in links[i][1]]} for i in in_order(c, links)]
+    edge = [i for e in ext for i in e.get("sends", []) + e.get("receives", [])]
+    stories = mentions(pm, [c.by[i][1]["name"] for i in edge])
+    told = {s["id"] for s in stories}
+    tests = []
+    for t in pm.get("tests") or []:
+        if ids & set(t["verifies"]):
+            t = {**t, "verifies": [v for v in t["verifies"] if v in ids], "scenarios": [s for s in t.get("scenarios") or [] if s in told]}
+            tests.append({k: v for k, v in t.items() if v or k != "scenarios"})
+    used = set(edge) | {i for x in funcs for k in ("inputs", "outputs") for i in x.get(k) or []} | \
+        {i for r in reqs for i in r.get("specifies") or []} | {i for x in ifs for i in x["carries"]}
+    out = {"stages": pm.get("stages"),
+           "system": {"id": comp, "name": name, "purpose": f"TBD: what {name} does for {named(c, c.sid)}, in one sentence"},
+           "sources": [{"id": "UP", "title": f"The level above: {origin}"}], "objectives": objs, "scenarios": stories,
+           "external": ext, "items": [x for x in pm.get("items") or [] if x["id"] in used], "requirements": reqs,
+           "functions": funcs, "interfaces": ifs, "tests": tests}
+    return copy.deepcopy({k: v for k, v in out.items() if v or k == "requirements"})   # nothing shared with pm
+
 def part_spec(m, comp, decisions, source):
     """Markdown build spec for component comp of an approved model."""
     c = index(m)
     sub = set(comps_under(c, comp))
-    subleaf, parent, system = c.cleaf & sub, c.comps[comp].get("parent"), named(c, c.sid)
+    parent, system = c.comps[comp].get("parent"), named(c, c.sid)
     purpose = (m["system"].get("purpose") or "").rstrip(".")
     n = max(range(1, 7), key=lambda s: (str(decisions[s].get("at")), s))   # same minute: the later step
     out = [f"# Spec: {named(c, comp)}", "",
@@ -808,17 +1067,23 @@ def part_spec(m, comp, decisions, source):
         out += ["", f"Built with: {c.comps[comp]['choice']}"]
     if comp not in c.cleaf:
         out += ["", f"Made of: {names(c, c.ckids[comp])}"]
+    stub = c.comps[comp].get("subsystem") is True   # designed at its own level; this level builds a stand-in
+    if stub:
+        out += ["", f"This part is a subsystem, designed at its own level: `{comp}/{Path(source).name}`."]
     out += ["", f"Generated from {source} after all six steps were approved (latest: step {n} by {decisions[n].get('by')}, "
             f"{str(decisions[n].get('at')).replace('T', ' ')}). Build what it says. If it is wrong or incomplete, "
             "change the model and get it approved again; don't work around it in code.", ""]
     jobs = [f for f in c.funcs if f in c.fleaf and where(c, f) in sub]
-    names_used = [c.by[i][1]["name"] for f in jobs for k in ("inputs", "outputs") for i in c.funcs[f].get(k) or [] if i in c.by]
-    said = lambda step: any(re.search(rf"(?<!\w){re.escape(n)}(?!\w)", step, re.I) for n in names_used)
-    stories = [s for s in m.get("scenarios") or [] if any(said(x) for x in s["steps"])]   # R19 keeps the words in step with the items
+    stories = mentions(m, [c.by[i][1]["name"] for f in jobs for k in ("inputs", "outputs") for i in c.funcs[f].get(k) or [] if i in c.by])
     if stories:
         out += ["## Scenarios", "", "The step 1 scenarios that mention something this part takes or gives.", ""]
         for s in stories:
             out += [f"### {s['id']} {s['name']}"] + [f"{n}. {x}" for n, x in enumerate(s["steps"], 1)] + [""]
+    if stub:
+        out += ["## Stub", "", "Build a stub, not the real part: a stand-in that honours the connections and items below, so the level "
+                "above can be built and tested without it. The jobs say the behaviour to fake. The real subsystem replaces the stub "
+                "later; until then, the tests of this part's own requirements prove nothing, because the jobs they check run in "
+                "the subsystem. Run them after the swap.", ""]
     out += ["## Jobs", ""]
     for f in jobs:
         out += job(c, f, sub, comp) + [""]
@@ -834,20 +1099,15 @@ def part_spec(m, comp, decisions, source):
     used = in_order(c, [i for f in jobs for k in ("inputs", "outputs") for i in c.funcs[f].get(k) or [] if i in c.by])
     if any(c.by[i][1].get("description") for i in used):
         out += ["## Items", ""] + [f"- **{named(c, i)}**" + (f": {c.by[i][1]['description']}" if c.by[i][1].get("description") else "") for i in used] + [""]
-    own, whole = [], []
-    for r in c.leafreqs:
-        got = reach(c, r)
-        if c.sid in spec(r) or not spec(r):
-            whole.append(r)
-        elif got & subleaf:
-            own.append((r, got - subleaf))
+    own, whole = own_reqs(c, comp)
     reqs = []
     for cat, title in (("io", "Inputs and outputs"), ("system-wide", "System-wide"),
                        ("trade-off", "Trade-offs"), ("qualification", "Qualification")):
         lines = [x for r, shared in own if r.get("category") == cat for x in req_lines(c, r, shared)]
         reqs += [f"### {title}", ""] + lines + [""] if lines else []
     if whole:
-        reqs += ["### Whole app", "", "These apply to the whole app; this part must not break them.", ""]
+        reqs += ["### Whole app", "", "These apply to the whole app, for reference." if stub else
+                 "These apply to the whole app; this part must not break them.", ""]
         reqs += [x for r in whole for x in req_lines(c, r)] + [""]
     if reqs:
         out += ["## Requirements", ""] + reqs
@@ -880,24 +1140,55 @@ pre {{ white-space: pre-wrap; padding: 12px; border: 1px solid #8884; border-rad
   if (r.version !== {version}) location.reload(); }} catch (e) {{}} }}, 1500);</script>
 """
 
+def levels_info(level, files, m):
+    """What the review page shows of the tree at a level (m): the way down from the root, and the subsystem parts of the level
+    with their current step and whose turn it is (turn None: no level of its own yet)."""
+    def system(k):
+        try:
+            return yaml.safe_load(files[k].read_text())["system"]
+        except (OSError, yaml.YAMLError, KeyError, TypeError):
+            return {}
+    parts = level.split("/") if level else []
+    keys = ["/".join(parts[:i]) for i in range(len(parts) + 1)]
+    crumbs = [dict(level=k, id=(parts[i - 1] if i else system(k).get("id")), name=system(k).get("name") or k) for i, k in enumerate(keys)]
+    kids = []
+    for x in m.get("components") or []:
+        if x.get("subsystem") is not True:
+            continue
+        key = f"{level}/{x['id']}".lstrip("/")
+        kid = dict(id=x["id"], name=x.get("name"), level=key if key in files else None, step=None, turn=None)
+        if key in files:
+            try:
+                nxt = level_now(files[key])[1]
+                kid.update(**(dict(step=nxt["step"], step_name=nxt["name"], turn=nxt["turn"], why=nxt["why"]) if nxt else dict(turn="done")))
+            except (OSError, yaml.YAMLError, KeyError, TypeError, AttributeError):
+                pass
+        kids.append(kid)
+    return dict(here=level, crumbs=crumbs, children=kids)
+
 def make_server(model, step=6, port=8765):
-    """Local review app for one model file: the page, live reload, and approve / send back saved to the review file."""
+    """Local review app for a model and every level under its root: the page, live reload, and approve / send back saved to the
+    review file of a level (?level=C1, "" is the root; a request that names none gets the level of the model given)."""
     model = Path(model).resolve()
-    reviews, vendor, lock = review_path(model), Path(__file__).with_name("vendor").resolve(), threading.Lock()
+    root, vendor, lock = root_of(model), Path(__file__).with_name("vendor").resolve(), threading.Lock()
+    home = "/".join(model.parent.relative_to(root.parent).parts)
 
     def version():
         return "-".join(f"{s.st_mtime_ns}.{s.st_size}" if s else "0" for s in
-                        (p.stat() if p.exists() else None for p in (model, reviews, model.with_name("decisions.md"))))
+                        (p.stat() if p.exists() else None for f in level_files(root).values()
+                         for p in (f, review_path(f), f.with_name("decisions.md"))))
 
-    def decide(body):
-        """Save one decision; returns (http status, reply)."""
+    def decide(level, body):
+        """Save one decision for a level; returns (http status, reply)."""
+        model = level_files(root)[level]
+        reviews = review_path(model)
         m = yaml.safe_load(model.read_text())
         n, decision, note = body.get("step"), body.get("decision"), str(body.get("note") or "").strip()
         if n not in range(1, step + 1) or decision not in ("approved", "sent back"):
             return 400, {"error": "Unknown step or decision."}
         if decision == "sent back" and not note:
             return 400, {"error": "Say what should change, then send it back."}
-        found = check_model(m, step)
+        found = check_model(m, step, load_up(model))
         if any(f["rule"] == "S01" for f in found):
             return 409, {"error": "The file doesn't match the format, so it can't be reviewed yet.", "reload": True}
         if body.get("fingerprint") != fingerprint(m, n):
@@ -909,6 +1200,8 @@ def make_server(model, step=6, port=8765):
             return 409, {"error": f"Fix the {errors} must-fix problems first."}
         decisions = load_reviews(reviews)
         if decision == "approved":
+            if blocked(model):
+                return 409, {"error": "The level above isn't approved yet, so nothing here can be approved. Approve it first."}
             rows = progress(m, decisions, model)
             early = next((r for r in rows if r["step"] < n and r["turn"] != "done"), None)
             if early:
@@ -924,7 +1217,8 @@ def make_server(model, step=6, port=8765):
                        "# step's fingerprint matches the model; a change to what the step shows makes it stale.\n"
                        + yaml.safe_dump(dict(sorted(decisions.items())), sort_keys=False, allow_unicode=True))
         os.replace(tmp, reviews)
-        return 200, {"version": version(), "review": review_state(m, decisions, step), "progress": progress(m, decisions, model)}
+        return 200, {"version": version(), "review": review_state(m, decisions, step), "progress": progress(m, decisions, model),
+                     "levels": levels_info(level, level_files(root), m)}
 
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *args):
@@ -946,9 +1240,13 @@ def make_server(model, step=6, port=8765):
             return self.headers.get("Host") in hosts and (origin is None or urlparse(origin).netloc in hosts)
 
         def do_GET(self):
-            path = urlparse(self.path).path
+            url = urlparse(self.path)
+            path, level = url.path, parse_qs(url.query, keep_blank_values=True).get("level", [home])[0]
             if not self.local():
                 return self.reply(403, {"error": "forbidden"})
+            files = level_files(root)
+            if path in ("/", "/api/version") and level not in files:
+                return self.reply(404, {"error": "unknown level"})
             if path == "/api/version":
                 return self.reply(200, {"version": version()})
             if path.startswith("/vendor/"):
@@ -958,13 +1256,13 @@ def make_server(model, step=6, port=8765):
                 return self.reply(404, {"error": "not found"})
             if path != "/":
                 return self.reply(404, {"error": "not found"})
-            v = version()
+            v, f = version(), files[level]
             try:
-                m = yaml.safe_load(model.read_text())
+                m = yaml.safe_load(f.read_text())
             except (OSError, yaml.YAMLError) as e:
-                page = UNREADABLE.format(name=html.escape(model.name), error=html.escape(str(e)), version=json.dumps(v))
+                page = UNREADABLE.format(name=html.escape(f.name), error=html.escape(str(e)), version=json.dumps(v))
                 return self.reply(200, page, "text/html")
-            page = render(m, step, load_reviews(reviews), {"version": v}, read_notes(model), model)
+            page = render(m, step, load_reviews(review_path(f)), {"version": v}, read_notes(f), f, levels_info(level, files, m))
             for url, name in VENDOR.items():
                 page = page.replace(url, "/vendor/" + name)
             self.reply(200, page, "text/html")
@@ -972,14 +1270,17 @@ def make_server(model, step=6, port=8765):
         def do_POST(self):
             if not self.local():
                 return self.reply(403, {"error": "forbidden"})
-            if urlparse(self.path).path != "/api/review":
+            url = urlparse(self.path)
+            if url.path != "/api/review":
                 return self.reply(404, {"error": "not found"})
             if self.headers.get("Content-Type", "").split(";")[0].strip() != "application/json":
                 return self.reply(415, {"error": "send JSON"})
             try:
                 body = json.loads(self.rfile.read(int(self.headers.get("Content-Length") or 0)))
+                body = body if isinstance(body, dict) else {}
+                level = body.get("level", parse_qs(url.query, keep_blank_values=True).get("level", [home])[0])
                 with lock:
-                    code, out = decide(body if isinstance(body, dict) else {})
+                    code, out = decide(level, body) if isinstance(level, str) and level in level_files(root) else (404, {"error": "unknown level"})
             except (OSError, ValueError, yaml.YAMLError) as e:
                 code, out = 400, {"error": f"Couldn't save: {e}"}
             self.reply(code, out)
@@ -1010,6 +1311,9 @@ def main(argv=None):
     sp = sub.add_parser("spec", help="print the build spec for one part (component) of an approved design")
     sp.add_argument("model")
     sp.add_argument("component")
+    lv = sub.add_parser("level", help="start the own level of a subsystem part of an approved design")
+    lv.add_argument("model")
+    lv.add_argument("component")
     s = sub.add_parser("serve", help="open the review app in the browser; approve or send back each step")
     s.add_argument("model")
     s.add_argument("--step", type=int, choices=range(1, 7), default=6, help="review steps 1..N (default 6)")
@@ -1021,14 +1325,14 @@ def main(argv=None):
         srv = make_server(args.model, args.step, args.port)
         url = f"http://127.0.0.1:{srv.server_address[1]}/"
         print(f"Reviewing {args.model} at {url}\nDecisions go to {review_path(args.model)}. Press Ctrl+C to stop.", flush=True)  # flush: seen at once when run in the background
-        write_state(args.model, serve={"pid": os.getpid(), "url": url})
+        write_state(root_of(args.model), serve={"pid": os.getpid(), "url": url})
         webbrowser.open(url)
         try:
             srv.serve_forever()
         except KeyboardInterrupt:
             pass
         finally:
-            write_state(args.model, serve=None)
+            write_state(root_of(args.model), serve=None)
         return 0
     if args.cmd == "wait":
         if not Path(args.model).is_file():
@@ -1037,8 +1341,8 @@ def main(argv=None):
         if done is None:
             print("The review app stopped. Start `serve` again, then `wait`.", file=sys.stderr)
             return 2
-        for n, d in sorted(done.items()):
-            print(f"Step {n} {STEPS[n]}: {d.get('decision')} by {d.get('by')}, {str(d.get('at', '')).replace('T', ' ')}")
+        for (lv, n), d in sorted(done.items()):
+            print(f"{f'Level {lv}: ' if lv else ''}Step {n} {STEPS[n]}: {d.get('decision')} by {d.get('by')}, {str(d.get('at', '')).replace('T', ' ')}")
             if d.get("note"):
                 print(f"Note: {d['note']}")
         print("\nRun `status` and go on with the loop.")
@@ -1051,6 +1355,8 @@ def main(argv=None):
         rows = progress(m, load_reviews(review_path(args.model)), args.model)
         app = serve_alive(args.model)
         print(f"Review app: {app['url']}" if app else "Review app: not running; start serve")
+        if parent_of(args.model):
+            print(f"Level above: ../{Path(args.model).name} (this is {m['system']['id']} of it)")
         for r in rows:
             extra = f" ({r['warnings']} worth a look)" if r["warnings"] and r["turn"] != "done" else ""
             print(f"{r['step']} {r['name']:<11} {r['turn'].upper():<7} {r['why']}{extra}")
@@ -1058,10 +1364,13 @@ def main(argv=None):
         print("\nAll six steps are approved. Build each part from `spec <component>`." if not nxt else
               f"\nNext: step {nxt['step']} {nxt['name']}, " +
               ("the AI's turn." if nxt["turn"] == "ai" else "waiting for a person to review it in `sysmodel serve`."))
+        below = level_lines(m, Path(args.model))
+        if below:
+            print("\nLevels below:", *below, sep="\n")
         return 0
     if args.cmd == "spec":
         decisions = load_reviews(review_path(args.model))
-        todo = [r for r in progress(m, decisions) if r["turn"] != "done"]
+        todo = [r for r in progress(m, decisions, args.model) if r["turn"] != "done"]
         if todo:
             print("No spec yet: the design isn't fully approved.", file=sys.stderr)
             for r in todo:
@@ -1072,12 +1381,35 @@ def main(argv=None):
             sys.exit(f"unknown part {args.component}; parts: " + ", ".join(named(c, i) for i in c.comps))
         print(part_spec(m, args.component, decisions, args.model))
         return 0
+    if args.cmd == "level":
+        for p in reversed([Path(args.model)] + levels_above(args.model)):   # the root first
+            todo = [r for r in progress(yaml.safe_load(p.read_text()), load_reviews(review_path(p)), p) if r["turn"] != "done"]
+            if todo:
+                sys.exit(f"{p} isn't fully approved (step {todo[0]['step']} {todo[0]['name']}: {todo[0]['why']}); "
+                         "a level starts from an approved design")
+        x = table(m, "components").get(args.component)
+        if not x or not x.get("subsystem"):
+            sys.exit(f"{args.component} is not a subsystem part; set `subsystem: true` on it in step 3 first")
+        child = Path(args.model).parent / args.component / Path(args.model).name
+        if child.exists():
+            sys.exit(f"{child} exists already")
+        child.parent.mkdir(exist_ok=True)
+        child.write_text(yaml.safe_dump(contract(m, args.component, f"../{child.name}"), sort_keys=False, allow_unicode=True))
+        if x.get("choice"):
+            child.with_name("decisions.md").write_text(f"## Step 3 Parts\n\nFixed by the level above: {x['choice']}; "
+                                                       "change it by a change request.\n")
+        write_state(child, handoff={})   # nothing here can be approved before the AI's first `wait`
+        print(f"wrote {child}")
+        if x.get("choice"):
+            print(f"Built with {x['choice']}: fixed by the level above, so design within it.")
+        print("Next: step 1 Problem, starting with the purpose. Run `status` on the new file.")
+        return 0
     if args.cmd == "render":
         out = Path(args.out or Path(args.model).with_suffix(".html"))
         out.write_text(render(m, args.step, load_reviews(review_path(args.model)), notes=read_notes(args.model), model=args.model))
         print(f"wrote {out}")
         return 0
-    found = check_model(m, args.step)
+    found = check_model(m, args.step, load_up(args.model))
     judgment = [j for j in JUDGMENT if j[1] <= args.step]
     counts = {s: sum(f["severity"] == s for f in found) for s in SEVERITIES}
     if args.json:

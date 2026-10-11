@@ -16,7 +16,7 @@ idea ──▶ AI drafts the design ──▶ you review & approve ──▶ bui
 
 - **One model, one source of truth.** The whole design lives in a single YAML file: requirements, jobs, parts, interfaces and tests, all linked. The pictures, the checks and the specs are all generated from it, so they can't drift apart.
 - **The AI asks; it doesn't invent.** Facts only you can know (users, budgets, thresholds, deadlines) are asked, never guessed or left as "TBD".
-- **Rules from the book, checked by machine.** 34 checks catch gaps before they become rework: a requirement nobody tests, a job with no part to run it, data crossing between parts with no interface.
+- **Rules from the book, checked by machine.** 38 checks catch gaps before they become rework: a requirement nobody tests, a job with no part to run it, data crossing between parts with no interface.
 - **People sign off where machines can't.** Each step ends in a review screen, where you approve it or send it back with a note. Change something later and the approval goes stale, so you see exactly what needs another look.
 - **Specs, not vibes.** When the design is approved, `spec` writes a build spec for each part: its scenarios, jobs, connections, requirements and the tests that prove them. That's everything a coding agent needs, and nothing it has to guess.
 
@@ -32,6 +32,10 @@ Each step answers one plain question, the way systems engineers have done for de
 | 4 Match | Which part does each job? | Every job given to one part, and budgets shared out |
 | 5 Interfaces | How do the parts connect? | Every connection and what it carries |
 | 6 Test plan | How will we prove it works? | A test for every requirement that needs one |
+
+## Big designs: levels
+
+A part can be marked a subsystem. It then gets its own model, designed through the same six steps one level down, starting from what the level above promised: its boundary, requirements, objectives and interfaces, kept in step by a check. Each level is understood, approved and debugged on its own, and the build goes top-down, with stubs for the subsystems until they are real. `sysmodel.py level <model> <part>` starts a level; [steps/levels.md](steps/levels.md) says when to use it.
 
 ## Quick start
 
@@ -64,6 +68,7 @@ python3 sysmodel.py serve  design/system.yaml       # the review app: pictures, 
 python3 sysmodel.py wait   design/system.yaml       # block until someone approves or sends back a step
 python3 sysmodel.py render design/system.yaml       # a static HTML snapshot to share
 python3 sysmodel.py spec   design/system.yaml C11   # the build spec for one part (once approved)
+python3 sysmodel.py level  design/system.yaml C1    # start the level of a subsystem part (once approved)
 ```
 
 The review app runs locally and works offline. Decisions are saved next to the model in `system.review.yaml`, so they live in your repo and show up in your diffs. The AI also keeps your answers in `answers.md` and its reasoning in `decisions.md`, so a later session picks up where the last left off.

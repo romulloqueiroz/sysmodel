@@ -19,8 +19,8 @@ def E(m, key, id):
     return next(x for x in m[key] if x["id"] == id)
 
 
-def rules(m):
-    return {f["rule"] for f in sysmodel.check_model(m)}
+def rules(m, up=None):
+    return {f["rule"] for f in sysmodel.check_model(m, up=up)}
 
 
 def settled(found):
@@ -75,6 +75,16 @@ def no_funcs(m):
 
 def add_e2(m, **kw):
     m["external"].append({"id": "E2", "name": "Build pipeline", "kind": "enabling", **kw})
+
+
+def drifted_level(m):
+    """m becomes the own level of part C2, with a boundary item renamed; returns the level above."""
+    up = copy.deepcopy(m)
+    E(up, "components", "C2")["subsystem"] = True
+    m.clear()
+    m.update(sysmodel.contract(up, "C2"))
+    E(m, "items", "I5")["name"] = "Row"
+    return up
 
 
 def lone_comp(m):
@@ -152,6 +162,7 @@ CASES = [
     ("R24", lambda m: E(m, "requirements", "Q1").update(text="The system shall create links, rules TBD.")),
     ("R24", setf("requirements", "Q3", threshold="tbr")),
     ("R24", setf("requirements", "Q0", text="Group of TBD things")),
+    ("R24", lambda m: m["system"].update(purpose="TBD")),
     ("R25", lambda m: drop(m, "tests", "T1")),
     ("R25", lambda m: drop(m, "tests", "T3")),
     ("R26", setf("requirements", "Q1", text="The system creates short links.")),
@@ -171,6 +182,10 @@ CASES = [
     ("C05", lambda m: m.update(scenarios=[{"id": "SC1", "name": "Visit", "steps": ["Web visitor sends Short code"]}])),
     ("C06", setf("interfaces", "IF2", carries=["I5", "I6", "I1"])),
     ("C06", setf("interfaces", "IF1", carries=["I1", "I2", "I3", "I4", "I5"])),
+    ("L01", drifted_level),
+    ("L02", setf("components", "C1", subsystem=True)),
+    ("L03", setf("components", "C2", subsystem=True)),
+    ("L04", setf("components", "C12", subsystem=True)),
 ]
 
 
@@ -195,8 +210,8 @@ def test_derived_system_wide_requirement_specifies_its_parts():
 @pytest.mark.parametrize("rule,mutate", CASES)
 def test_rule_fires(rule, mutate):
     m = copy.deepcopy(VALID)
-    mutate(m)
-    assert rule in rules(m)
+    up = mutate(m)                                                # a case may return the level above
+    assert rule in rules(m, up if isinstance(up, dict) else None)
 
 
 def test_every_rule_has_a_case():

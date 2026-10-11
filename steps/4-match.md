@@ -28,6 +28,7 @@ Decide which leaf part runs each leaf function, and what each part must meet. Th
    | Apportionment (p. 251) | cost, availability, reliability: split one number, same units | one system-wide requirement per part: same subcategory, `derived_from` the system one, `specifies` the part, `threshold` with its share |
    | Synthesis (p. 252) | outputs such as response time, needing a model | io requirements on the items and functions along the path; `runs_in` places them on parts |
 
+   Every subsystem part needs its share of each system-wide quality, cost and schedule requirement (L03): its level inherits that share as its own budget (pp. 251-252). Give the share by apportionment or synthesis. A constraint such as a mandated technology reaches every part unchanged (equivalence): L03 does not check it, and the child inherits it as it is.
    Propose the split, for example X as A, B and C with Y% in reserve (propose it; the engineer confirms in review). If you chose a number yourself, set `source` to the proposal source as above.
 5. **Trade-off requirements** (A1141, p. 252–255). Derive a per-part one only from an existing system-level one, with the same `objective`; never create a part requirement with nothing above it (p. 252). Value curves and weights have no field (p. 252–255): skip them. Leave qualification requirements to step 6 (tests).
 6. **Check** and decide each finding (see Checks). List every warning or advice you leave in place, with the reason.
@@ -50,7 +51,11 @@ Decide which leaf part runs each leaf function, and what each part must meet. Th
 | R15 warning (p. 249) | Leaf functions under one first-level function run in more than one first-level part | Move leaves with `runs_in`, or regroup the functions (step 2, ask) |
 | R16 warning (p. 243) | A leaf part has no function running in it | A function is missing (step 2, ask) or the part is not needed (step 3, ask) |
 | R17 advice (p. 214) | First-level functions and parts do not map one-to-one: two functions land on one part, or a part gets none | See below |
+| L03 warning (pp. 251-252) | A subsystem part has no share of a system-wide quality, cost or schedule requirement | Derive one from it that `specifies` the part (Do 4); a requirement that reaches the part counts (a share of a parent part does not: apportion that budget again for each subsystem part) |
+| L04 warning (p. 322) | A job split into smaller jobs has smallest jobs both inside a subsystem part and outside it | Make the subsystem own whole jobs: move the leaves with `runs_in`, or regroup the functions (step 2, ask) |
 | R30 (a) error (p. 57) | An io or system-wide requirement reaches no part: it specifies a function with no placed leaf, an item no leaf function uses, or only an external | Place the function (as R14) or point `specifies` at the function or item it is about. System-wide: `specifies: [S]` |
+
+L03 and L04 appear only when step 3 marked a subsystem part (see [levels.md](levels.md)). The book wants each function handled by one subsystem, so the teams can work apart (p. 322). Accept L03 only with the engineer's OK and a line in `decisions.md`, for a budget the part cannot affect. A top function always spans every part, so L04 skips it.
 
 One wrong `runs_in` often triggers R15, R16 and R17 together. Fix the cause first.
 Errors are never accepted. When to accept the rest, with the engineer's OK and a line in `decisions.md`:

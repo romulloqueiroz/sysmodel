@@ -19,6 +19,7 @@ Fix the design problem: how the app is used (scenarios), where it stops and what
 - If the file already has content (a sent-back pass), read all of it and the review note. Edit; do not overwrite.
 - Work at system level: the whole app is a black box. No parts, no internals (p. 134).
 - Read the `### For step 1` notes in `decisions.md` (work earlier steps deferred to this one).
+- In a subsystem's level the model already holds the boundary, the objectives and the requirements the level above set, frozen (L01), and `purpose` is `TBD`. Do not redo them: write the purpose, extend the scenarios, derive weights and add only what is this part's own. Approval of this step is the preliminary design review with the stakeholders (p. 259). See [levels.md](levels.md).
 
 ## Do
 1. **Stakeholders and sources** (the stakeholder inputs that feed A1111-A1114, Fig 6.3 p. 135; pp. 132, 145)
@@ -102,11 +103,12 @@ Fix the design problem: how the app is used (scenarios), where it stops and what
 | R18 (p. 43) | every external sends or receives items; a `context` sends some and receives none; an `external` receives some | no items at all: a law or policy is a `source`; a host or tool is a step 3 choice, so delete it and put what it implies in requirement text. A context that receives: make it `external`. An external that receives nothing: make it `context` |
 | R21 (p. 145) | each leaf has a `source` or `derived_from` | add a source (ask) |
 | R23 (p. 138) | a system-wide `quality`, `cost` or `schedule` requirement has a `threshold` | add the number with units |
-| R24 (p. 145) | no TBD or TBR in `text` or `threshold` | ask for the value |
+| R24 (p. 145) | no TBD or TBR in `text`, `threshold` or the system `purpose` | ask for the value |
 | R26 (p. 145), warning | `text` contains "shall" | rewrite as a requirement |
 | C02 (p. 143), warning | each leaf objective is the `objective` of some requirement | set `objective` on the requirement that measures it; drop the objective if none does |
 | C03 (p. 142), advice | each qualification subcategory (observance, verification-plan, validation-plan, acceptance-plan) has a requirement | write the missing one (7) |
 | C04 (p. 155), warning | when every sibling objective has a `weight`, they add to 1 | change the weights with the engineer |
+| L01 (p. 321), error, a subsystem's level only | the model differs from the level above: boundary, inherited requirements, objectives or interfaces | restore it, or send a change request ([levels.md](levels.md)) |
 
 R05 and R07 (step 2) need io `specifies`; R25 (step 6) needs a test per io and system-wide requirement, so write each so a test can pass or fail.
 

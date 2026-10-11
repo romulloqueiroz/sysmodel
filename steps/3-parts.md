@@ -6,7 +6,8 @@ Decide the parts the app is built from: a tree of components (p. 210) from the s
 - `components[]` (physical architecture, p. 210): one entry per part: `id`, `name`, `parent`, `choice`.
 - `parent` (decomposition, p. 210): the system id for first-level parts, a component id below. A component that nobody names as `parent` is a leaf (a configuration item).
 - `choice`: the option the chosen alternative uses for that part (a product, language or service, such as SQLite), so the build spec can say what to build it with. `name` stays the role. Leave it out where no option was picked.
-- Nothing else. The generic architecture, the morphological box, the alternatives and the reason for the pick have no field. They go in `decisions.md` (Do 7).
+- `subsystem: true` (optional, p. 321): the part gets its own level, a model of its own designed through the six steps. See [levels.md](levels.md).
+- Nothing else. The generic architecture, the morphological box, the alternatives and the reason for the pick have no field. They go in `decisions.md` (Do 8).
 
 ## Start from
 - Step 2: `functions`. Every leaf function needs a home (p. 211); the first-level functions guide the first-level parts (p. 214).
@@ -26,8 +27,9 @@ Decide the parts the app is built from: a tree of components (p. 210) from the s
    **Ask:** (only if the weights do not settle it) When cost, speed and availability conflict, which wins here?
    The pick is provisional: step 4 may send you back here (p. 216). Propose the pick (propose it; the engineer confirms in review).
 5. **Write the tree** (p. 210, 214). Put the chosen alternative's parts in `components`. `name` is the role ("Database"); put the chosen alternative's option for that part in `choice` ("SQLite"). If the engineer wants a product to be binding, that is a technology requirement, which edits step 1: propose it and ask first. Go down only as far as the leaf functions need: step 4 warns about a leaf part that no function runs in.
-6. **Check the partition** (R13, p. 102). For each level, write one line per part saying what it owns. No two parts may own the same thing (overlap) and nothing the app must do may be owned by none (gap). Fix both before the hand-off.
-7. **Decisions content.** The model keeps only the pick, so write to `decisions.md` under this step's heading: the generic parts, the box (columns and options), the alternatives with their themes, how each did on the four issues, the combinations you ruled out, the pick and why it beat the others, and any step 1 or 2 change you propose.
+6. **Mark subsystems** (p. 321). Mark a part `subsystem: true` only when all three hold: its insides need their own breakdown beyond this level (pp. 202, 210, 238); it can be handed off and designed alone (p. 214); it owns whole functions no sibling shares (p. 322). Mark it a smallest part: its insides are designed at its own level, so it has no parts here (L02). Small splits stay in this model. **Ask:** Which parts will a different team or stack build? The part's `choice` is fixed for its level: change it later by a change request.
+7. **Check the partition** (R13, p. 102). For each level, write one line per part saying what it owns. No two parts may own the same thing (overlap) and nothing the app must do may be owned by none (gap). Fix both before the hand-off.
+8. **Decisions content.** The model keeps only the pick, so write to `decisions.md` under this step's heading: the generic parts, the box (columns and options), the alternatives with their themes, how each did on the four issues, the combinations you ruled out, the pick and why it beat the others, and any step 1 or 2 change you propose, and why each subsystem is one.
 
 ## Good vs bad
 - Generic first, instances second (p. 211, 213). Bad: parts named `Redis`, `Express`, `Vercel`. Good: `name: Cache, choice: Redis`, `name: Web service, choice: Express on Vercel`; the products are options in the box, and the pick goes in `choice`. A host is part of the choice of the part it runs.
@@ -41,7 +43,11 @@ Decide the parts the app is built from: a tree of components (p. 210) from the s
 - State representative instances, not detailed designs (p. 210).
 
 ## Checks
-No `sysmodel check` rule starts at step 3. Earlier rules still catch slips here: S02 (duplicate id), S03 (`parent` must be the system id or another component), R11 (a parent chain that loops).
+| Rule | What it means | Usual fix |
+|---|---|---|
+| L02 (p. 321), error | a subsystem part has parts of its own in this model | remove its parts or its `subsystem` flag; its insides are designed in its own level. This is the tool's tailoring; the book's subsystems are the first-level parts |
+
+No other `sysmodel check` rule starts at step 3. Earlier rules still catch slips here: S02 (duplicate id), S03 (`parent` must be the system id or another component), R11 (a parent chain that loops).
 Step 4 will later warn R16 (leaf part with no function) and advise R17 (first-level parts and functions not one-to-one). Build the tree with those in mind.
 
 A person signs off: R13 (p. 102), the component breakdown is a partition.
